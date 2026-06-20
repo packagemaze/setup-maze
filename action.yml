@@ -1,0 +1,78 @@
+name: Setup maze
+description: Install the PackageMaze maze CLI
+
+inputs:
+  version:
+    description: PackageMaze CLI release tag to install.
+    default: v0.0.1
+  repository:
+    description: GitHub repository that publishes maze CLI release assets.
+    default: packagemaze/setup-maze
+  install-dir:
+    description: Directory where the maze binary is installed.
+    required: false
+  release-base-url:
+    description: Override release asset base URL for tests and mirrors.
+    required: false
+
+outputs:
+  binary:
+    description: Installed maze binary path.
+    value: ${{ steps.install.outputs.binary }}
+  path:
+    description: Directory added to PATH.
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        REQUESTED_INSTALL_DIR: ${{ inputs.install-dir }}
+        RELEASE_BASE_URL: ${{ inputs.release-base-url }}
+        REPOSITORY: ${{ inputs.repository }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        case "${RUNNER_OS}/${RUNNER_ARCH}" in
+          Linux/X64) platform="linux_amd64" ;;
+          Linux/ARM64) platform="linux_arm64" ;;
+          macOS/ARM64) platform="darwin_arm64" ;;
+          *)
+            printf 'setup-maze does not publish a maze binary for %s/%s yet.\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2
+            exit 1
+            ;;
+        esac
+
+        if [ -n "$RELEASE_BASE_URL" ]; then
+          release_url="${RELEASE_BASE_URL%/}"
+        elif [ "$VERSION" = "latest" ]; then
+          release_url="https://github.com/${REPOSITORY}/releases/latest/download"
+        else
+          release_url="https://github.com/${REPOSITORY}/releases/download/${VERSION}"
+        fi
+
+        install_dir="$REQUESTED_INSTALL_DIR"
+        if [ -z "$install_dir" ]; then
+          install_dir="${RUNNER_TEMP}/setup-maze/bin"
+        fi
+
+        tmp_dir="$(mktemp -d)"
+        trap 'rm -rf "$tmp_dir"' EXIT
+
+        archive="maze_${platform}.tar.gz"
+        curl -fsSLo "${tmp_dir}/${archive}" "${release_url}/${archive}"
+        curl -fsSLo "${tmp_dir}/maze_checksums.txt" "${release_url}/maze_checksums.txt"
+        grep "  ${archive}$" "${tmp_dir}/maze_checksums.txt" > "${tmp_dir}/${archive}.sha256"
+        (cd "$tmp_dir" && shasum -a 256 -c "${archive}.sha256")
+
+        tar -xzf "${tmp_dir}/${archive}" -C "$tmp_dir" maze
+        mkdir -p "$install_dir"
+        install -m 0755 "${tmp_dir}/maze" "${install_dir}/maze"
+        "${install_dir}/maze" version
+
+        printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
+        printf 'binary=%s/maze\n' "$install_dir" >> "$GITHUB_OUTPUT"
+        printf 'path=%s\n' "$install_dir" >> "$GITHUB_OUTPUT"

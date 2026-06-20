@@ -1,0 +1,54 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7.0.0
+
+      - name: Create fake release assets
+        run: |
+          set -euo pipefail
+          mkdir -p fake-release fake-bin
+          cat > fake-bin/maze <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          case "$*" in
+            "version") printf 'maze smoke\n' ;;
+            "auth exchange-oidc --help") printf 'Exchange a CI OIDC identity token\n' ;;
+            *) printf 'unexpected args: %s\n' "$*" >&2; exit 2 ;;
+          esac
+          SCRIPT
+          chmod +x fake-bin/maze
+          tar -C fake-bin -czf fake-release/maze_linux_amd64.tar.gz maze
+          (cd fake-release && shasum -a 256 maze_linux_amd64.tar.gz > maze_checksums.txt)
+
+      - name: Serve fake release assets
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --directory fake-release &
+          printf '%s\n' "$!" > fake-release-server.pid
+          sleep 1
+
+      - uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+
+      - name: Smoke installed CLI
+        run: maze auth exchange-oidc --help
+
+      - name: Stop fake release server
+        if: always()
+        run: |
+          if [ -f fake-release-server.pid ]; then
+            kill "$(cat fake-release-server.pid)" || true
+          fi
