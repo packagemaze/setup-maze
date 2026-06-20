@@ -54,8 +54,8 @@ func newExchangeOIDCCommand(deps auth.Dependencies) *cobra.Command {
 		Short: "Exchange a CI OIDC identity token for a PackageMaze Token",
 		Long: "Exchange a CI OIDC identity token for a short-lived PackageMaze Token.\n\n" +
 			"The command supports GitHub Actions, GitLab CI/CD, CircleCI, and manual token input.",
-		Example: "  maze auth exchange-oidc --feed your-org/your-feed --purpose install\n" +
-			"  maze auth exchange-oidc --feed your-org/your-feed --purpose publish --package your-package --format json",
+		Example: "  maze auth exchange-oidc --feed your-org/your-feed --purpose install --format github-output\n" +
+			"  maze auth exchange-oidc --feed your-org/your-feed --purpose publish --package your-package --format github-output",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			runDeps := deps
 			if runDeps.Env == nil {
