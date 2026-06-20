@@ -4,10 +4,10 @@ description: Install the PackageMaze maze CLI
 inputs:
   version:
     description: PackageMaze CLI release tag to install.
-    default: maze-v0.0.1
+    default: v0.0.1
   repository:
     description: GitHub repository that publishes maze CLI release assets.
-    default: packagemaze/packagemaze
+    default: packagemaze/setup-maze
   install-dir:
     description: Directory where the maze binary is installed.
     required: false
