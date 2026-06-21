@@ -1,6 +1,7 @@
 # setup-maze
 
-GitHub Action that installs the PackageMaze `maze` CLI.
+GitHub Action that installs the PackageMaze `maze` CLI from
+[`packagemaze/maze-cli`](https://github.com/packagemaze/maze-cli) releases.
 
 ```yaml
 permissions:
@@ -16,5 +17,5 @@ steps:
       NODE_AUTH_TOKEN: ${{ steps.packagemaze.outputs.token }}
 ```
 
-Published binaries currently cover Linux x64, Linux ARM64, and macOS ARM64.
+Published CLI binaries currently cover Linux x64, Linux ARM64, and macOS ARM64.
 Windows is not supported yet.

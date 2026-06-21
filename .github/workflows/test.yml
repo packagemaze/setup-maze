@@ -46,6 +46,11 @@ jobs:
       - name: Smoke installed CLI
         run: maze auth exchange-oidc --help
 
+      - uses: ./
+
+      - name: Smoke default release install
+        run: maze auth exchange-oidc --help
+
       - name: Stop fake release server
         if: always()
         run: |
