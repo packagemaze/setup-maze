@@ -7,7 +7,7 @@ inputs:
     default: v0.0.1
   repository:
     description: GitHub repository that publishes maze CLI release assets.
-    default: packagemaze/setup-maze
+    default: packagemaze/maze-cli
   install-dir:
     description: Directory where the maze binary is installed.
     required: false
@@ -41,7 +41,7 @@ runs:
           Linux/ARM64) platform="linux_arm64" ;;
           macOS/ARM64) platform="darwin_arm64" ;;
           *)
-            printf 'setup-maze does not publish a maze binary for %s/%s yet.\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2
+            printf 'PackageMaze does not publish a maze binary for %s/%s yet.\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2
             exit 1
             ;;
         esac
