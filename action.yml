@@ -14,6 +14,16 @@ inputs:
   release-base-url:
     description: Override release asset base URL for tests and mirrors.
     required: false
+  feed:
+    description: PackageMaze Feed in org/feed form. When omitted, setup-maze only installs maze.
+    required: false
+  purpose:
+    description: PackageMaze token purpose.
+    required: false
+    default: install
+  package:
+    description: Package name for publish tokens. Only valid with purpose publish.
+    required: false
 
 outputs:
   binary:
@@ -22,6 +32,9 @@ outputs:
   path:
     description: Directory added to PATH.
     value: ${{ steps.install.outputs.path }}
+  token:
+    description: PackageMaze token when feed is set.
+    value: ${{ steps.exchange.outputs.token }}
 
 runs:
   using: composite
@@ -76,3 +89,41 @@ runs:
         printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
         printf 'binary=%s/maze\n' "$install_dir" >> "$GITHUB_OUTPUT"
         printf 'path=%s\n' "$install_dir" >> "$GITHUB_OUTPUT"
+
+    - id: validate-token-inputs
+      if: ${{ inputs.feed != '' || inputs.package != '' }}
+      shell: bash
+      env:
+        FEED: ${{ inputs.feed }}
+        PACKAGE_NAME: ${{ inputs.package }}
+        PURPOSE: ${{ inputs.purpose }}
+      run: |
+        set -euo pipefail
+
+        if [ -n "$PACKAGE_NAME" ] && [ "$PURPOSE" != "publish" ]; then
+          printf 'The package input is only valid with purpose: publish.\n' >&2
+          exit 1
+        fi
+
+        if [ -n "$PACKAGE_NAME" ] && [ -z "$FEED" ]; then
+          printf 'The package input requires feed so setup-maze can request a publish token.\n' >&2
+          exit 1
+        fi
+
+    - id: exchange
+      if: ${{ inputs.feed != '' }}
+      shell: bash
+      env:
+        FEED: ${{ inputs.feed }}
+        MAZE_BINARY: ${{ steps.install.outputs.binary }}
+        PACKAGE_NAME: ${{ inputs.package }}
+        PURPOSE: ${{ inputs.purpose }}
+      run: |
+        set -euo pipefail
+
+        args=(auth exchange-oidc --feed "$FEED" --purpose "$PURPOSE" --format github-output)
+        if [ "$PURPOSE" = "publish" ] && [ -n "$PACKAGE_NAME" ]; then
+          args+=(--package "$PACKAGE_NAME")
+        fi
+
+        "$MAZE_BINARY" "${args[@]}"

@@ -25,6 +25,14 @@ jobs:
           case "$*" in
             "version") printf 'maze smoke\n' ;;
             "auth exchange-oidc --help") printf 'Exchange a CI OIDC identity token\n' ;;
+            "auth exchange-oidc --feed org/feed --purpose install --format github-output")
+              printf '::add-mask::fake-install-token\n'
+              printf 'token=fake-install-token\n' >> "$GITHUB_OUTPUT"
+              ;;
+            "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
+              printf '::add-mask::fake-publish-token\n'
+              printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
+              ;;
             *) printf 'unexpected args: %s\n' "$*" >&2; exit 2 ;;
           esac
           SCRIPT
@@ -39,12 +47,65 @@ jobs:
           printf '%s\n' "$!" > fake-release-server.pid
           sleep 1
 
-      - uses: ./
+      - id: install_only
+        uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
 
-      - name: Smoke installed CLI
-        run: maze auth exchange-oidc --help
+      - name: Check install-only outputs
+        env:
+          BINARY: ${{ steps.install_only.outputs.binary }}
+          INSTALL_PATH: ${{ steps.install_only.outputs.path }}
+          TOKEN: ${{ steps.install_only.outputs.token }}
+        run: |
+          set -euo pipefail
+          test -x "$BINARY"
+          test -d "$INSTALL_PATH"
+          test -z "$TOKEN"
+          maze auth exchange-oidc --help
+
+      - id: install_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+
+      - name: Check install token output
+        env:
+          TOKEN: ${{ steps.install_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          test "$TOKEN" = "fake-install-token"
+
+      - id: publish_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: publish
+          package: "@scope/package"
+
+      - name: Check publish token output
+        env:
+          TOKEN: ${{ steps.publish_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          test "$TOKEN" = "fake-publish-token"
+
+      - id: invalid_package
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          package: "@scope/package"
+
+      - name: Check package validation
+        env:
+          OUTCOME: ${{ steps.invalid_package.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
 
       - uses: ./
 
