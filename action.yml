@@ -25,7 +25,7 @@ inputs:
     description: Package name for publish tokens. Required with purpose publish.
     required: false
   secret-id:
-    description: Optional BuildKit secret id for purpose docker-build. Use a protocol-matched packagemaze_npm_* or packagemaze_pypi_* bundle id only when one Docker build needs multiple same-protocol PackageMaze Feeds. Do not include a token segment.
+    description: Optional BuildKit secret id for purpose docker-build. Use a lowercase protocol-matched packagemaze_npm_* or packagemaze_pypi_* bundle id only when one Docker build needs multiple same-protocol PackageMaze Feeds. Do not include a token segment.
     required: false
 
 outputs:

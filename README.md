@@ -155,7 +155,7 @@ repository configuration.
 | `feed`             | unset                     | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                                                |
 | `purpose`          | `install`                 | Token purpose passed to `maze auth exchange-oidc`.                                                                                 |
 | `package`          | unset                     | Package name for publish tokens. Required with `purpose: publish`.                                                                 |
-| `secret-id`        | protocol default          | Optional Docker BuildKit bundle id for `purpose: docker-build`. Use only when one Docker build needs multiple same-protocol Feeds; do not include a `token` segment. |
+| `secret-id`        | protocol default          | Optional Docker BuildKit bundle id for `purpose: docker-build`. Use a lowercase protocol-matched id only when one Docker build needs multiple same-protocol Feeds; do not include a `token` segment. |
 
 ## Outputs
 
