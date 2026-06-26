@@ -95,6 +95,35 @@ Docker bundles currently complete npm/pnpm installs for npm Feeds and pip or
 installs need first-class bundle support before PackageMaze can treat them as
 complete.
 
+If one Docker build needs multiple PackageMaze Feeds, keep one setup-maze step
+per Feed and list each `secret_files` output directly under the same
+`secret-files: |` block:
+
+```yaml
+- id: maze-npm-docker
+  uses: packagemaze/setup-maze@v0.0.3
+  with:
+    feed: <organization>/<npm-feed>
+    purpose: docker-build
+- id: maze-pypi-docker
+  uses: packagemaze/setup-maze@v0.0.3
+  with:
+    feed: <organization>/<pypi-feed>
+    purpose: docker-build
+- uses: docker/build-push-action@v7
+  with:
+    context: .
+    file: Dockerfile
+    secret-files: |
+      ${{ steps.maze-npm-docker.outputs.secret_files }}
+      ${{ steps.maze-pypi-docker.outputs.secret_files }}
+```
+
+For target-specific Docker builds, PackageMaze review currently fails closed
+because it cannot prove which Dockerfile stages are reached. To be review-ready,
+either use a non-target build or pass all generated bundle outputs required
+anywhere in that Dockerfile to each target-specific build.
+
 If one Docker build needs two Feeds that use the same Artifact Protocol, keep
 one setup-maze step per Feed and give each step a distinct lowercase,
 protocol-matched `secret-id`, such as `packagemaze_npm_web` and
@@ -146,15 +175,15 @@ repository configuration.
 
 ## Inputs
 
-| Name               | Default                   | Description                                                                                                                        |
-| ------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | `v0.0.2`                  | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                                       |
-| `repository`       | `packagemaze/maze-cli`    | GitHub repository that publishes maze CLI release assets.                                                                          |
-| `install-dir`      | runner temp directory     | Directory where the maze binary is installed.                                                                                      |
-| `release-base-url` | release URL for `version` | Override release asset base URL for tests and mirrors.                                                                             |
-| `feed`             | unset                     | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                                                |
-| `purpose`          | `install`                 | Token purpose passed to `maze auth exchange-oidc`.                                                                                 |
-| `package`          | unset                     | Package name for publish tokens. Required with `purpose: publish`.                                                                 |
+| Name               | Default                   | Description                                                                                                                                                                                          |
+| ------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`          | `v0.0.2`                  | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                                                                                                         |
+| `repository`       | `packagemaze/maze-cli`    | GitHub repository that publishes maze CLI release assets.                                                                                                                                            |
+| `install-dir`      | runner temp directory     | Directory where the maze binary is installed.                                                                                                                                                        |
+| `release-base-url` | release URL for `version` | Override release asset base URL for tests and mirrors.                                                                                                                                               |
+| `feed`             | unset                     | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                                                                                                                  |
+| `purpose`          | `install`                 | Token purpose passed to `maze auth exchange-oidc`.                                                                                                                                                   |
+| `package`          | unset                     | Package name for publish tokens. Required with `purpose: publish`.                                                                                                                                   |
 | `secret-id`        | protocol default          | Optional Docker BuildKit bundle id for `purpose: docker-build`. Use a lowercase protocol-matched id only when one Docker build needs multiple same-protocol Feeds; do not include a `token` segment. |
 
 ## Outputs
