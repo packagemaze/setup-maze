@@ -4,7 +4,7 @@ description: Install the PackageMaze maze CLI
 inputs:
   version:
     description: PackageMaze CLI release tag to install.
-    default: v0.0.1
+    default: v0.0.2
   repository:
     description: GitHub repository that publishes maze CLI release assets.
     default: packagemaze/maze-cli
@@ -23,9 +23,6 @@ inputs:
     default: install
   package:
     description: Package name for publish tokens. Only valid with purpose publish.
-    required: false
-  client:
-    description: Package client family for Docker build secret output. Use npm or pypi with purpose docker-build.
     required: false
   package-base-url:
     description: PackageMaze Package Client base URL used when generating Docker build package-client config.
@@ -107,25 +104,14 @@ runs:
         printf 'path=%s\n' "$install_dir" >> "$GITHUB_OUTPUT"
 
     - id: validate-token-inputs
-      if: ${{ inputs.feed != '' || inputs.package != '' || inputs.client != '' || inputs.purpose == 'docker-build' }}
+      if: ${{ inputs.feed != '' || inputs.package != '' || inputs.purpose == 'docker-build' }}
       shell: bash
       env:
-        CLIENT: ${{ inputs.client }}
         FEED: ${{ inputs.feed }}
         PACKAGE_NAME: ${{ inputs.package }}
         PURPOSE: ${{ inputs.purpose }}
       run: |
         set -euo pipefail
-
-        if [ -n "$CLIENT" ] && [ "$PURPOSE" != "docker-build" ]; then
-          printf 'The client input is only valid with purpose: docker-build.\n' >&2
-          exit 1
-        fi
-
-        if [ "$PURPOSE" = "docker-build" ] && [ -z "$CLIENT" ]; then
-          printf 'The client input is required with purpose: docker-build. Use client: npm or client: pypi.\n' >&2
-          exit 1
-        fi
 
         if [ "$PURPOSE" = "docker-build" ] && [ -z "$FEED" ]; then
           printf 'The docker-build purpose requires feed so setup-maze can request a Docker build token.\n' >&2
@@ -173,8 +159,8 @@ runs:
       if: ${{ inputs.feed != '' && inputs.purpose == 'docker-build' }}
       shell: bash
       env:
-        CLIENT: ${{ inputs.client }}
         FEED: ${{ inputs.feed }}
+        FEED_PROTOCOL: ${{ steps.exchange.outputs.artifact_protocol }}
         PACKAGE_BASE_URL: ${{ inputs.package-base-url }}
         PACKAGE_MAZE_TOKEN: ${{ steps.exchange.outputs.token }}
       run: |
@@ -191,8 +177,8 @@ runs:
         auth_path="${feed_url#http://}"
         auth_path="${auth_path#https://}"
 
-        case "$CLIENT" in
-          npm|pnpm|yarn|bun)
+        case "$FEED_PROTOCOL" in
+          npm)
             secret_id="packagemaze_npm"
             secret_file="${RUNNER_TEMP}/packagemaze-npm.sh"
             {
@@ -209,7 +195,7 @@ runs:
               printf 'export COREPACK_NPM_TOKEN="$MAZE_TOKEN"\n'
             } > "$secret_file"
             ;;
-          pypi|pip|uv|poetry|pdm)
+          pypi)
             secret_id="packagemaze_pypi"
             secret_file="${RUNNER_TEMP}/packagemaze-pypi.sh"
             {
@@ -228,7 +214,7 @@ runs:
             } > "$secret_file"
             ;;
           *)
-            printf 'Unsupported docker-build client: %s. Use npm or pypi.\n' "$CLIENT" >&2
+            printf 'Unsupported or missing Feed protocol for docker-build: %s. setup-maze requires maze CLI support for artifact_protocol and an npm or pypi Feed.\n' "$FEED_PROTOCOL" >&2
             exit 1
             ;;
         esac

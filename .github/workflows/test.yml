@@ -28,10 +28,17 @@ jobs:
             "auth exchange-oidc --feed org/feed --purpose install --format github-output")
               printf '::add-mask::fake-install-token\n'
               printf 'token=fake-install-token\n' >> "$GITHUB_OUTPUT"
+              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+              ;;
+            "auth exchange-oidc --feed org/feed --purpose docker-build --format github-output")
+              printf '::add-mask::fake-docker-token\n'
+              printf 'token=fake-docker-token\n' >> "$GITHUB_OUTPUT"
+              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
               ;;
             "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
               printf '::add-mask::fake-publish-token\n'
               printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
+              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
               ;;
             *) printf 'unexpected args: %s\n' "$*" >&2; exit 2 ;;
           esac
@@ -92,6 +99,27 @@ jobs:
           set -euo pipefail
           test "$TOKEN" = "fake-publish-token"
 
+      - id: docker_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: docker-build
+
+      - name: Check Docker secret outputs
+        env:
+          SECRET_ARGS: ${{ steps.docker_token.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.docker_token.outputs.secret_files }}
+          SECRET_ID: ${{ steps.docker_token.outputs.secret_id }}
+          TOKEN: ${{ steps.docker_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          test -z "$TOKEN"
+          test "$SECRET_ID" = "packagemaze_npm"
+          test -n "$SECRET_ARGS"
+          test -f "${SECRET_FILES#packagemaze_npm=}"
+          grep -q "fake-docker-token" "${SECRET_FILES#packagemaze_npm=}"
+
       - id: invalid_package
         uses: ./
         continue-on-error: true
@@ -108,8 +136,10 @@ jobs:
           test "$OUTCOME" = "failure"
 
       - uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
 
-      - name: Smoke default release install
+      - name: Smoke release install
         run: maze auth exchange-oidc --help
 
       - name: Stop fake release server

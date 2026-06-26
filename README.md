@@ -55,7 +55,6 @@ steps:
     with:
       feed: <organization>/<feed>
       purpose: docker-build
-      client: npm
 
   - uses: docker/build-push-action@v7
     with:
@@ -70,7 +69,7 @@ RUN --mount=type=secret,id=packagemaze_npm \
     . /run/secrets/packagemaze_npm && pnpm install --frozen-lockfile
 ```
 
-For Python image builds, use `client: pypi` and mount `packagemaze_pypi`:
+For PyPI Feeds, mount `packagemaze_pypi`:
 
 ```dockerfile
 # syntax=docker/dockerfile:1.7
@@ -120,23 +119,23 @@ steps:
       PIP_INDEX_URL: https://__token__:${{ steps.maze.outputs.token }}@pkg.packagemaze.com/<organization>/<feed>/simple/
 ```
 
-setup-maze does not configure package clients. Keep `.npmrc`, npm/pnpm/yarn/bun
-settings, pip/uv/Poetry index settings, and any workflow environment for package
-clients in your project workflow or repository configuration.
+Outside `purpose: docker-build`, setup-maze does not configure package clients.
+Keep `.npmrc`, npm/pnpm/yarn/bun settings, pip/uv/Poetry index settings, and
+any workflow environment for package clients in your project workflow or
+repository configuration.
 
 ## Inputs
 
-| Name               | Default                       | Description                                                                                                       |
-| ------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `version`          | `v0.0.1`                      | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                      |
-| `repository`       | `packagemaze/maze-cli`        | GitHub repository that publishes maze CLI release assets.                                                         |
-| `install-dir`      | runner temp directory         | Directory where the maze binary is installed.                                                                     |
-| `release-base-url` | release URL for `version`     | Override release asset base URL for tests and mirrors.                                                            |
-| `feed`             | unset                         | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                               |
-| `purpose`          | `install`                     | Token purpose passed to `maze auth exchange-oidc`.                                                                |
-| `package`          | unset                         | Package name for publish tokens. Only valid with `purpose: publish`.                                              |
-| `client`           | unset                         | Package client family for Docker build secret output. Required with `purpose: docker-build`; use `npm` or `pypi`. |
-| `package-base-url` | `https://pkg.packagemaze.com` | PackageMaze Package Client base URL used when generating Docker build package-client config.                      |
+| Name               | Default                       | Description                                                                                  |
+| ------------------ | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| `version`          | `v0.0.2`                      | PackageMaze CLI release tag to install. Use `latest` for the latest release.                 |
+| `repository`       | `packagemaze/maze-cli`        | GitHub repository that publishes maze CLI release assets.                                    |
+| `install-dir`      | runner temp directory         | Directory where the maze binary is installed.                                                |
+| `release-base-url` | release URL for `version`     | Override release asset base URL for tests and mirrors.                                       |
+| `feed`             | unset                         | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.          |
+| `purpose`          | `install`                     | Token purpose passed to `maze auth exchange-oidc`.                                           |
+| `package`          | unset                         | Package name for publish tokens. Only valid with `purpose: publish`.                         |
+| `package-base-url` | `https://pkg.packagemaze.com` | PackageMaze Package Client base URL used when generating Docker build package-client config. |
 
 ## Outputs
 
