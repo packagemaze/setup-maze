@@ -177,6 +177,22 @@ jobs:
             test -z "${COREPACK_NPM_TOKEN:-}"
           )
 
+      - id: invalid_docker_token_secret_id
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: docker-build
+          secret-id: packagemaze_npm_token
+
+      - name: Check Docker secret id validation rejects token-looking ids
+        env:
+          OUTCOME: ${{ steps.invalid_docker_token_secret_id.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
       - name: Create npm Docker smoke file
         run: |
           cat > Dockerfile.packagemaze-npm-smoke <<'DOCKERFILE'

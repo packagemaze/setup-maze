@@ -42,7 +42,9 @@ packages the token as a BuildKit secret bundle instead of exposing a plain token
 output. Use one setup-maze step for the Docker build Feed and mount the
 generated secret only for the package-client `RUN` instruction. The generated
 package-client config uses the Feed Base URL returned by PackageMaze during
-token exchange.
+token exchange. Install and publish access rules do not cover Docker image
+build tokens; configure a separate PackageMaze GitHub Actions access rule with
+`purpose: docker-build` for the Feed.
 
 ```yaml
 permissions:
@@ -148,7 +150,7 @@ repository configuration.
 | `feed`             | unset                     | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                                                |
 | `purpose`          | `install`                 | Token purpose passed to `maze auth exchange-oidc`.                                                                                 |
 | `package`          | unset                     | Package name for publish tokens. Required with `purpose: publish`.                                                                 |
-| `secret-id`        | protocol default          | Optional Docker BuildKit secret id for `purpose: docker-build`. Use only when one Docker build needs multiple same-protocol Feeds. |
+| `secret-id`        | protocol default          | Optional Docker BuildKit bundle id for `purpose: docker-build`. Use only when one Docker build needs multiple same-protocol Feeds; do not include a `token` segment. |
 
 ## Outputs
 

@@ -25,7 +25,7 @@ inputs:
     description: Package name for publish tokens. Required with purpose publish.
     required: false
   secret-id:
-    description: Optional BuildKit secret id for purpose docker-build. Use a protocol-matched packagemaze_npm_* or packagemaze_pypi_* id only when one Docker build needs multiple same-protocol PackageMaze Feeds.
+    description: Optional BuildKit secret id for purpose docker-build. Use a protocol-matched packagemaze_npm_* or packagemaze_pypi_* bundle id only when one Docker build needs multiple same-protocol PackageMaze Feeds. Do not include a token segment.
     required: false
 
 outputs:
@@ -232,6 +232,10 @@ runs:
               printf 'Docker npm secret-id must be packagemaze_npm or a packagemaze_npm-prefixed id.\n' >&2
               exit 1
             fi
+            if [[ "$secret_id" =~ (^|[_.-])token([_.-]|$) ]]; then
+              printf 'Docker npm secret-id must not include a token segment; use a bundle id such as packagemaze_npm or packagemaze_npm_web.\n' >&2
+              exit 1
+            fi
             secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-npm.XXXXXXXX")"
             {
               printf 'PACKAGEMAZE_NPM_CONFIG_DIR="$(mktemp -d)"\n'
@@ -252,6 +256,10 @@ runs:
             fi
             if [[ ! "$secret_id" =~ ^packagemaze[_-]pypi([_.-][A-Za-z0-9]+)*$ ]]; then
               printf 'Docker PyPI secret-id must be packagemaze_pypi or a packagemaze_pypi-prefixed id.\n' >&2
+              exit 1
+            fi
+            if [[ "$secret_id" =~ (^|[_.-])token([_.-]|$) ]]; then
+              printf 'Docker PyPI secret-id must not include a token segment; use a bundle id such as packagemaze_pypi or packagemaze_pypi_api.\n' >&2
               exit 1
             fi
             case "$feed_url" in
