@@ -137,6 +137,14 @@ jobs:
           test "${SECRET_FILES#packagemaze_npm=}" = "$SECRET_PATH"
           grep -q "fake-docker-token" "$SECRET_PATH"
           grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$SECRET_PATH"
+          (
+            . "$SECRET_PATH"
+            test "$MAZE_TOKEN" = "fake-docker-token"
+            test -f "$NPM_CONFIG_USERCONFIG"
+            grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$NPM_CONFIG_USERCONFIG"
+            test "$COREPACK_NPM_REGISTRY" = "https://pkg.packagemaze.com/org/feed/"
+            test "$COREPACK_NPM_TOKEN" = "$MAZE_TOKEN"
+          )
 
       - id: docker_admin_token
         uses: ./
@@ -180,6 +188,20 @@ jobs:
           test "${SECRET_FILES#packagemaze_pypi=}" = "$SECRET_PATH"
           grep -q "fake-pypi-docker-token" "$SECRET_PATH"
           grep -q "PACKAGEMAZE_PYPI_INDEX_SCHEME='http'" "$SECRET_PATH"
+          (
+            . "$SECRET_PATH"
+            test "$MAZE_TOKEN" = "fake-pypi-docker-token"
+            test "$PACKAGEMAZE_PYPI_INDEX_SCHEME" = "http"
+            test -f "$PIP_CONFIG_FILE"
+            grep -q "pkg.packagemaze.test/org/pypi/simple/" "$PIP_CONFIG_FILE"
+            case "$PIP_INDEX_URL" in
+              http://__token__:*@pkg.packagemaze.test/org/pypi/simple/) ;;
+              *) exit 1 ;;
+            esac
+            test "$UV_INDEX_URL" = "$PIP_INDEX_URL"
+            test "$UV_INDEX_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN"
+            test "$POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN"
+          )
 
       - id: invalid_package
         uses: ./
