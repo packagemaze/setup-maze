@@ -22,6 +22,14 @@ jobs:
           cat > fake-bin/maze <<'SCRIPT'
           #!/usr/bin/env bash
           set -euo pipefail
+          write_shell_exchange() {
+            printf 'export MAZE_TOKEN=%s\n' "'$1'"
+            printf 'export MAZE_TOKEN_EXPIRES_AT=%s\n' "'2026-06-26T00:15:00Z'"
+            printf 'export MAZE_FEED=%s\n' "'$2'"
+            printf 'export MAZE_FEED_BASE_URL=%s\n' "'$3'"
+            printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
+            printf 'export MAZE_ARTIFACT_PROTOCOL=%s\n' "'$4'"
+          }
           case "$*" in
             "version") printf 'maze smoke\n' ;;
             "auth exchange-oidc --help") printf 'Exchange a CI OIDC identity token\n' ;;
@@ -31,23 +39,14 @@ jobs:
               printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
               printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
               ;;
-            "auth exchange-oidc --feed org/feed --purpose docker-build --format github-output")
-              printf '::add-mask::fake-docker-token\n'
-              printf 'token=fake-docker-token\n' >> "$GITHUB_OUTPUT"
-              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
-              printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
+            "auth exchange-oidc --feed org/feed --purpose docker-build --format shell")
+              write_shell_exchange fake-docker-token org/feed https://pkg.packagemaze.com/org/feed npm
               ;;
-            "auth exchange-oidc --feed org/admin --purpose docker-build --format github-output")
-              printf '::add-mask::fake-admin-docker-token\n'
-              printf 'token=fake-admin-docker-token\n' >> "$GITHUB_OUTPUT"
-              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
-              printf 'feed_base_url=https://pkg.packagemaze.com/org/admin\n' >> "$GITHUB_OUTPUT"
+            "auth exchange-oidc --feed org/admin --purpose docker-build --format shell")
+              write_shell_exchange fake-admin-docker-token org/admin https://pkg.packagemaze.com/org/admin npm
               ;;
-            "auth exchange-oidc --feed org/pypi --purpose docker-build --format github-output")
-              printf '::add-mask::fake-pypi-docker-token\n'
-              printf 'token=fake-pypi-docker-token\n' >> "$GITHUB_OUTPUT"
-              printf 'artifact_protocol=pypi\n' >> "$GITHUB_OUTPUT"
-              printf 'feed_base_url=http://pkg.packagemaze.test/org/pypi\n' >> "$GITHUB_OUTPUT"
+            "auth exchange-oidc --feed org/pypi --purpose docker-build --format shell")
+              write_shell_exchange fake-pypi-docker-token org/pypi http://pkg.packagemaze.test/org/pypi pypi
               ;;
             "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
               printf '::add-mask::fake-publish-token\n'
@@ -137,13 +136,16 @@ jobs:
           test "${SECRET_FILES#packagemaze_npm=}" = "$SECRET_PATH"
           grep -q "fake-docker-token" "$SECRET_PATH"
           grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$SECRET_PATH"
+          ! grep -q "MAZE_TOKEN" "$SECRET_PATH"
+          ! grep -q "COREPACK_NPM_TOKEN" "$SECRET_PATH"
           (
             . "$SECRET_PATH"
-            test "$MAZE_TOKEN" = "fake-docker-token"
+            test -z "${MAZE_TOKEN:-}"
             test -f "$NPM_CONFIG_USERCONFIG"
             grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$NPM_CONFIG_USERCONFIG"
+            grep -q "fake-docker-token" "$NPM_CONFIG_USERCONFIG"
             test "$COREPACK_NPM_REGISTRY" = "https://pkg.packagemaze.com/org/feed/"
-            test "$COREPACK_NPM_TOKEN" = "$MAZE_TOKEN"
+            test -z "${COREPACK_NPM_TOKEN:-}"
           )
 
       - name: Create npm Docker smoke file
@@ -153,11 +155,12 @@ jobs:
           FROM alpine:3.20
           RUN --mount=type=secret,id=packagemaze_npm \
               . /run/secrets/packagemaze_npm && \
-              test "$MAZE_TOKEN" = "fake-docker-token" && \
+              test -z "${MAZE_TOKEN:-}" && \
               test -f "$NPM_CONFIG_USERCONFIG" && \
               grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$NPM_CONFIG_USERCONFIG" && \
+              grep -q "fake-docker-token" "$NPM_CONFIG_USERCONFIG" && \
               test "$COREPACK_NPM_REGISTRY" = "https://pkg.packagemaze.com/org/feed/" && \
-              test "$COREPACK_NPM_TOKEN" = "$MAZE_TOKEN"
+              test -z "${COREPACK_NPM_TOKEN:-}"
           DOCKERFILE
 
       - name: Build npm Docker smoke with secret-files
@@ -209,9 +212,13 @@ jobs:
           test "${SECRET_FILES#packagemaze_pypi=}" = "$SECRET_PATH"
           grep -q "fake-pypi-docker-token" "$SECRET_PATH"
           grep -q "PACKAGEMAZE_PYPI_INDEX_SCHEME='http'" "$SECRET_PATH"
+          ! grep -q "MAZE_TOKEN" "$SECRET_PATH"
+          ! grep -q "UV_INDEX_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"
+          ! grep -q "POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"
           (
             . "$SECRET_PATH"
-            test "$MAZE_TOKEN" = "fake-pypi-docker-token"
+            test -z "${MAZE_TOKEN:-}"
+            test -z "${PACKAGEMAZE_PYPI_TOKEN:-}"
             test "$PACKAGEMAZE_PYPI_INDEX_SCHEME" = "http"
             test -f "$PIP_CONFIG_FILE"
             grep -q "pkg.packagemaze.test/org/pypi/simple/" "$PIP_CONFIG_FILE"
@@ -220,8 +227,6 @@ jobs:
               *) exit 1 ;;
             esac
             test "$UV_INDEX_URL" = "$PIP_INDEX_URL"
-            test "$UV_INDEX_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN"
-            test "$POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN"
           )
 
       - name: Create PyPI Docker smoke file
@@ -231,13 +236,12 @@ jobs:
           FROM alpine:3.20
           RUN --mount=type=secret,id=packagemaze_pypi \
               . /run/secrets/packagemaze_pypi && \
-              test "$MAZE_TOKEN" = "fake-pypi-docker-token" && \
+              test -z "${MAZE_TOKEN:-}" && \
+              test -z "${PACKAGEMAZE_PYPI_TOKEN:-}" && \
               test "$PACKAGEMAZE_PYPI_INDEX_SCHEME" = "http" && \
               test -f "$PIP_CONFIG_FILE" && \
               grep -q "pkg.packagemaze.test/org/pypi/simple/" "$PIP_CONFIG_FILE" && \
-              test "$UV_INDEX_URL" = "$PIP_INDEX_URL" && \
-              test "$UV_INDEX_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN" && \
-              test "$POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN"
+              test "$UV_INDEX_URL" = "$PIP_INDEX_URL"
           DOCKERFILE
 
       - name: Build PyPI Docker smoke with secret_args

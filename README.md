@@ -84,8 +84,9 @@ RUN --mount=type=secret,id=packagemaze_pypi \
     . /run/secrets/packagemaze_pypi && pip install -r requirements.txt
 ```
 
-The generated PyPI bundle also exports pip, uv, and Poetry environment
-variables for the same PackageMaze Feed during that `RUN` instruction.
+The generated PyPI bundle also exports pip and uv index settings for the same
+PackageMaze Feed during that `RUN` instruction. Docker bundles do not expose a
+generic `MAZE_TOKEN` environment variable.
 
 If one Docker build needs two Feeds that use the same Artifact Protocol, keep
 one setup-maze step per Feed and give each step a distinct protocol-matched

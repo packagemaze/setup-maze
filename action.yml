@@ -137,7 +137,7 @@ runs:
         fi
 
     - id: exchange
-      if: ${{ inputs.feed != '' }}
+      if: ${{ inputs.feed != '' && inputs.purpose != 'docker-build' }}
       shell: bash
       env:
         FEED: ${{ inputs.feed }}
@@ -167,9 +167,8 @@ runs:
       if: ${{ inputs.feed != '' && inputs.purpose == 'docker-build' }}
       shell: bash
       env:
-        FEED_BASE_URL: ${{ steps.exchange.outputs.feed_base_url }}
-        FEED_PROTOCOL: ${{ steps.exchange.outputs.artifact_protocol }}
-        PACKAGE_MAZE_TOKEN: ${{ steps.exchange.outputs.token }}
+        FEED: ${{ inputs.feed }}
+        MAZE_BINARY: ${{ steps.install.outputs.binary }}
         REQUESTED_SECRET_ID: ${{ inputs.secret-id }}
       run: |
         set -euo pipefail
@@ -178,6 +177,19 @@ runs:
         shell_quote() {
           printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
         }
+
+        exchange_file="$(mktemp "${RUNNER_TEMP}/packagemaze-exchange.XXXXXXXX")"
+        trap 'rm -f "$exchange_file"' EXIT
+        "$MAZE_BINARY" auth exchange-oidc --feed "$FEED" --purpose docker-build --format shell > "$exchange_file"
+        # shellcheck disable=SC1090
+        . "$exchange_file"
+        rm -f "$exchange_file"
+
+        PACKAGE_MAZE_TOKEN="$MAZE_TOKEN"
+        FEED_BASE_URL="$MAZE_FEED_BASE_URL"
+        FEED_PROTOCOL="$MAZE_ARTIFACT_PROTOCOL"
+        printf '::add-mask::%s\n' "$PACKAGE_MAZE_TOKEN"
+        unset MAZE_TOKEN MAZE_TOKEN_EXPIRES_AT MAZE_FEED MAZE_FEED_BASE_URL MAZE_PURPOSE MAZE_ARTIFACT_PROTOCOL
 
         if [ -z "$FEED_BASE_URL" ]; then
           printf 'Missing Feed Base URL for docker-build. setup-maze requires maze CLI support for feed_base_url.\n' >&2
@@ -212,17 +224,15 @@ runs:
             fi
             secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-npm.XXXXXXXX")"
             {
-              printf 'export MAZE_TOKEN=%s\n' "$(shell_quote "$PACKAGE_MAZE_TOKEN")"
               printf 'PACKAGEMAZE_NPM_CONFIG_DIR="$(mktemp -d)"\n'
               printf 'trap '\''rm -rf "$PACKAGEMAZE_NPM_CONFIG_DIR"'\'' EXIT\n'
               printf 'cat > "$PACKAGEMAZE_NPM_CONFIG_DIR/npmrc" <<'\''PACKAGEMAZE_NPMRC'\''\n'
               printf 'registry=%s/\n' "$feed_url"
               printf 'replace-registry-host=always\n'
-              printf '//%s/:_authToken=${MAZE_TOKEN}\n' "$auth_path"
+              printf '//%s/:_authToken=%s\n' "$auth_path" "$PACKAGE_MAZE_TOKEN"
               printf 'PACKAGEMAZE_NPMRC\n'
               printf 'export NPM_CONFIG_USERCONFIG="$PACKAGEMAZE_NPM_CONFIG_DIR/npmrc"\n'
               printf 'export COREPACK_NPM_REGISTRY=%s\n' "$(shell_quote "${feed_url}/")"
-              printf 'export COREPACK_NPM_TOKEN="$MAZE_TOKEN"\n'
             } > "$secret_file"
             ;;
           pypi)
@@ -240,19 +250,16 @@ runs:
             esac
             secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-pypi.XXXXXXXX")"
             {
-              printf 'export MAZE_TOKEN=%s\n' "$(shell_quote "$PACKAGE_MAZE_TOKEN")"
+              printf 'PACKAGEMAZE_PYPI_TOKEN=%s\n' "$(shell_quote "$PACKAGE_MAZE_TOKEN")"
               printf 'PACKAGEMAZE_PIP_CONFIG_DIR="$(mktemp -d)"\n'
               printf 'PACKAGEMAZE_PYPI_INDEX_SCHEME=%s\n' "$(shell_quote "$feed_scheme")"
               printf 'PACKAGEMAZE_PYPI_AUTH_PATH=%s\n' "$(shell_quote "$auth_path")"
               printf 'trap '\''rm -rf "$PACKAGEMAZE_PIP_CONFIG_DIR"'\'' EXIT\n'
-              printf 'printf '\''[global]\\nindex-url = %%s://__token__:%%s@%%s/simple/\\n'\'' "$PACKAGEMAZE_PYPI_INDEX_SCHEME" "$MAZE_TOKEN" "$PACKAGEMAZE_PYPI_AUTH_PATH" > "$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
+              printf 'printf '\''[global]\\nindex-url = %%s://__token__:%%s@%%s/simple/\\n'\'' "$PACKAGEMAZE_PYPI_INDEX_SCHEME" "$PACKAGEMAZE_PYPI_TOKEN" "$PACKAGEMAZE_PYPI_AUTH_PATH" > "$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
               printf 'export PIP_CONFIG_FILE="$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
-              printf 'export PIP_INDEX_URL="${PACKAGEMAZE_PYPI_INDEX_SCHEME}://__token__:${MAZE_TOKEN}@${PACKAGEMAZE_PYPI_AUTH_PATH}/simple/"\n'
+              printf 'export PIP_INDEX_URL="${PACKAGEMAZE_PYPI_INDEX_SCHEME}://__token__:${PACKAGEMAZE_PYPI_TOKEN}@${PACKAGEMAZE_PYPI_AUTH_PATH}/simple/"\n'
               printf 'export UV_INDEX_URL="$PIP_INDEX_URL"\n'
-              printf 'export UV_INDEX_PACKAGEMAZE_USERNAME="__token__"\n'
-              printf 'export UV_INDEX_PACKAGEMAZE_PASSWORD="$MAZE_TOKEN"\n'
-              printf 'export POETRY_HTTP_BASIC_PACKAGEMAZE_USERNAME="__token__"\n'
-              printf 'export POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD="$MAZE_TOKEN"\n'
+              printf 'unset PACKAGEMAZE_PYPI_TOKEN\n'
             } > "$secret_file"
             ;;
           *)
