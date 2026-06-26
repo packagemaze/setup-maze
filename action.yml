@@ -232,7 +232,8 @@ runs:
               printf 'Docker npm secret-id must be packagemaze_npm or a packagemaze_npm-prefixed id.\n' >&2
               exit 1
             fi
-            if [[ "$secret_id" =~ (^|[_.-])token([_.-]|$) ]]; then
+            secret_id_lower="${secret_id,,}"
+            if [[ "$secret_id_lower" =~ (^|[_.-])token([_.-]|$) ]]; then
               printf 'Docker npm secret-id must not include a token segment; use a bundle id such as packagemaze_npm or packagemaze_npm_web.\n' >&2
               exit 1
             fi
@@ -258,7 +259,8 @@ runs:
               printf 'Docker PyPI secret-id must be packagemaze_pypi or a packagemaze_pypi-prefixed id.\n' >&2
               exit 1
             fi
-            if [[ "$secret_id" =~ (^|[_.-])token([_.-]|$) ]]; then
+            secret_id_lower="${secret_id,,}"
+            if [[ "$secret_id_lower" =~ (^|[_.-])token([_.-]|$) ]]; then
               printf 'Docker PyPI secret-id must not include a token segment; use a bundle id such as packagemaze_pypi or packagemaze_pypi_api.\n' >&2
               exit 1
             fi
