@@ -146,6 +146,27 @@ jobs:
             test "$COREPACK_NPM_TOKEN" = "$MAZE_TOKEN"
           )
 
+      - name: Create npm Docker smoke file
+        run: |
+          cat > Dockerfile.packagemaze-npm-smoke <<'DOCKERFILE'
+          # syntax=docker/dockerfile:1.7
+          FROM alpine:3.20
+          RUN --mount=type=secret,id=packagemaze_npm \
+              . /run/secrets/packagemaze_npm && \
+              test "$MAZE_TOKEN" = "fake-docker-token" && \
+              test -f "$NPM_CONFIG_USERCONFIG" && \
+              grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$NPM_CONFIG_USERCONFIG" && \
+              test "$COREPACK_NPM_REGISTRY" = "https://pkg.packagemaze.com/org/feed/" && \
+              test "$COREPACK_NPM_TOKEN" = "$MAZE_TOKEN"
+          DOCKERFILE
+
+      - name: Build npm Docker smoke with secret-files
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.packagemaze-npm-smoke
+          secret-files: ${{ steps.docker_token.outputs.secret_files }}
+
       - id: docker_admin_token
         uses: ./
         with:
@@ -203,6 +224,25 @@ jobs:
             test "$POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN"
           )
 
+      - name: Create PyPI Docker smoke file
+        run: |
+          cat > Dockerfile.packagemaze-pypi-smoke <<'DOCKERFILE'
+          # syntax=docker/dockerfile:1.7
+          FROM alpine:3.20
+          RUN --mount=type=secret,id=packagemaze_pypi \
+              . /run/secrets/packagemaze_pypi && \
+              test "$MAZE_TOKEN" = "fake-pypi-docker-token" && \
+              test "$PACKAGEMAZE_PYPI_INDEX_SCHEME" = "http" && \
+              test -f "$PIP_CONFIG_FILE" && \
+              grep -q "pkg.packagemaze.test/org/pypi/simple/" "$PIP_CONFIG_FILE" && \
+              test "$UV_INDEX_URL" = "$PIP_INDEX_URL" && \
+              test "$UV_INDEX_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN" && \
+              test "$POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" = "$MAZE_TOKEN"
+          DOCKERFILE
+
+      - name: Build PyPI Docker smoke with secret_args
+        run: docker buildx build ${{ steps.docker_pypi_token.outputs.secret_args }} -f Dockerfile.packagemaze-pypi-smoke .
+
       - id: invalid_package
         uses: ./
         continue-on-error: true
@@ -214,6 +254,21 @@ jobs:
       - name: Check package validation
         env:
           OUTCOME: ${{ steps.invalid_package.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: invalid_secret_id
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          secret-id: packagemaze_npm
+
+      - name: Check secret-id validation
+        env:
+          OUTCOME: ${{ steps.invalid_secret_id.outcome }}
         run: |
           set -euo pipefail
           test "$OUTCOME" = "failure"

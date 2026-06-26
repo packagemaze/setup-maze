@@ -106,12 +106,13 @@ runs:
         printf 'path=%s\n' "$install_dir" >> "$GITHUB_OUTPUT"
 
     - id: validate-token-inputs
-      if: ${{ inputs.feed != '' || inputs.package != '' || inputs.purpose == 'docker-build' }}
+      if: ${{ inputs.feed != '' || inputs.package != '' || inputs.secret-id != '' || inputs.purpose == 'docker-build' }}
       shell: bash
       env:
         FEED: ${{ inputs.feed }}
         PACKAGE_NAME: ${{ inputs.package }}
         PURPOSE: ${{ inputs.purpose }}
+        SECRET_ID: ${{ inputs.secret-id }}
       run: |
         set -euo pipefail
 
@@ -122,6 +123,11 @@ runs:
 
         if [ -n "$PACKAGE_NAME" ] && [ "$PURPOSE" != "publish" ]; then
           printf 'The package input is only valid with purpose: publish.\n' >&2
+          exit 1
+        fi
+
+        if [ -n "$SECRET_ID" ] && [ "$PURPOSE" != "docker-build" ]; then
+          printf 'The secret-id input is only valid with purpose: docker-build.\n' >&2
           exit 1
         fi
 
