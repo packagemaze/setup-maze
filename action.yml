@@ -22,7 +22,7 @@ inputs:
     required: false
     default: install
   package:
-    description: Package name for publish tokens. Only valid with purpose publish.
+    description: Package name for publish tokens. Required with purpose publish.
     required: false
   secret-id:
     description: Optional BuildKit secret id for purpose docker-build. Use a protocol-matched packagemaze_npm_* or packagemaze_pypi_* id only when one Docker build needs multiple same-protocol PackageMaze Feeds.
@@ -106,7 +106,7 @@ runs:
         printf 'path=%s\n' "$install_dir" >> "$GITHUB_OUTPUT"
 
     - id: validate-token-inputs
-      if: ${{ inputs.feed != '' || inputs.package != '' || inputs.secret-id != '' || inputs.purpose == 'docker-build' }}
+      if: ${{ inputs.feed != '' || inputs.package != '' || inputs.secret-id != '' || inputs.purpose == 'docker-build' || inputs.purpose == 'publish' }}
       shell: bash
       env:
         FEED: ${{ inputs.feed }}
@@ -118,6 +118,16 @@ runs:
 
         if [ "$PURPOSE" = "docker-build" ] && [ -z "$FEED" ]; then
           printf 'The docker-build purpose requires feed so setup-maze can request a Docker build token.\n' >&2
+          exit 1
+        fi
+
+        if [ "$PURPOSE" = "publish" ] && [ -z "$FEED" ]; then
+          printf 'The publish purpose requires feed so setup-maze can request a publish token.\n' >&2
+          exit 1
+        fi
+
+        if [ "$PURPOSE" = "publish" ] && [ -z "$PACKAGE_NAME" ]; then
+          printf 'The publish purpose requires package so PackageMaze can scope the publish token.\n' >&2
           exit 1
         fi
 
@@ -192,7 +202,7 @@ runs:
         unset MAZE_TOKEN MAZE_TOKEN_EXPIRES_AT MAZE_FEED MAZE_FEED_BASE_URL MAZE_PURPOSE MAZE_ARTIFACT_PROTOCOL
 
         if [ -z "$FEED_BASE_URL" ]; then
-          printf 'Missing Feed Base URL for docker-build. setup-maze requires maze CLI support for feed_base_url.\n' >&2
+          printf 'Docker bundles need maze CLI v0.0.2+ so setup-maze can receive the Feed Base URL.\n' >&2
           exit 1
         fi
 
@@ -263,7 +273,7 @@ runs:
             } > "$secret_file"
             ;;
           *)
-            printf 'Unsupported or missing Feed protocol for docker-build: %s. setup-maze requires maze CLI support for artifact_protocol and an npm or pypi Feed.\n' "$FEED_PROTOCOL" >&2
+            printf 'Unsupported or missing Artifact Protocol for docker-build: %s. Docker bundles need maze CLI v0.0.2+ and an npm or PyPI Feed.\n' "$FEED_PROTOCOL" >&2
             exit 1
             ;;
         esac

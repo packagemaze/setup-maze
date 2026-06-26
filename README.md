@@ -93,7 +93,7 @@ one setup-maze step per Feed and give each step a distinct protocol-matched
 `secret-id`, such as `packagemaze_npm_web` and `packagemaze_npm_admin`.
 Use those ids in the matching Dockerfile mounts.
 
-Publish tokens can include the package name:
+Publish tokens require the Feed and package name:
 
 ```yaml
 permissions:
@@ -147,7 +147,7 @@ repository configuration.
 | `release-base-url` | release URL for `version` | Override release asset base URL for tests and mirrors.                                                                             |
 | `feed`             | unset                     | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                                                |
 | `purpose`          | `install`                 | Token purpose passed to `maze auth exchange-oidc`.                                                                                 |
-| `package`          | unset                     | Package name for publish tokens. Only valid with `purpose: publish`.                                                               |
+| `package`          | unset                     | Package name for publish tokens. Required with `purpose: publish`.                                                                 |
 | `secret-id`        | protocol default          | Optional Docker BuildKit secret id for `purpose: docker-build`. Use only when one Docker build needs multiple same-protocol Feeds. |
 
 ## Outputs
