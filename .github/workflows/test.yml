@@ -179,7 +179,7 @@ jobs:
           test -f "$SECRET_PATH"
           test "${SECRET_FILES#packagemaze_pypi=}" = "$SECRET_PATH"
           grep -q "fake-pypi-docker-token" "$SECRET_PATH"
-          grep -q "http://__token__:" "$SECRET_PATH"
+          grep -q "PACKAGEMAZE_PYPI_INDEX_SCHEME='http'" "$SECRET_PATH"
 
       - id: invalid_package
         uses: ./
