@@ -35,6 +35,11 @@ jobs:
               printf 'token=fake-docker-token\n' >> "$GITHUB_OUTPUT"
               printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
               ;;
+            "auth exchange-oidc --feed org/pypi --purpose docker-build --format github-output")
+              printf '::add-mask::fake-pypi-docker-token\n'
+              printf 'token=fake-pypi-docker-token\n' >> "$GITHUB_OUTPUT"
+              printf 'artifact_protocol=pypi\n' >> "$GITHUB_OUTPUT"
+              ;;
             "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
               printf '::add-mask::fake-publish-token\n'
               printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
@@ -119,6 +124,27 @@ jobs:
           test -n "$SECRET_ARGS"
           test -f "${SECRET_FILES#packagemaze_npm=}"
           grep -q "fake-docker-token" "${SECRET_FILES#packagemaze_npm=}"
+
+      - id: docker_pypi_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/pypi
+          purpose: docker-build
+
+      - name: Check Docker PyPI secret outputs
+        env:
+          SECRET_ARGS: ${{ steps.docker_pypi_token.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.docker_pypi_token.outputs.secret_files }}
+          SECRET_ID: ${{ steps.docker_pypi_token.outputs.secret_id }}
+          TOKEN: ${{ steps.docker_pypi_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          test -z "$TOKEN"
+          test "$SECRET_ID" = "packagemaze_pypi"
+          test -n "$SECRET_ARGS"
+          test -f "${SECRET_FILES#packagemaze_pypi=}"
+          grep -q "fake-pypi-docker-token" "${SECRET_FILES#packagemaze_pypi=}"
 
       - id: invalid_package
         uses: ./
