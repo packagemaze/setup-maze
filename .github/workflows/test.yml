@@ -48,6 +48,12 @@ jobs:
             "auth exchange-oidc --feed org/pypi --purpose docker-build --format shell")
               write_shell_exchange fake-pypi-docker-token org/pypi http://pkg.packagemaze.test/org/pypi pypi
               ;;
+            "auth exchange-oidc --feed org/missing-metadata --purpose docker-build --format shell")
+              write_shell_exchange fake-missing-metadata-token org/missing-metadata "" npm
+              ;;
+            "auth exchange-oidc --feed org/unsupported --purpose docker-build --format shell")
+              write_shell_exchange fake-unsupported-token org/unsupported https://pkg.packagemaze.com/org/unsupported maven
+              ;;
             "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
               printf '::add-mask::fake-publish-token\n'
               printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
@@ -208,6 +214,52 @@ jobs:
         run: |
           set -euo pipefail
           test "$OUTCOME" = "failure"
+
+      - id: invalid_docker_missing_metadata
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/missing-metadata
+          purpose: docker-build
+
+      - name: Check Docker metadata validation requires feed base URL
+        env:
+          OUTCOME: ${{ steps.invalid_docker_missing_metadata.outcome }}
+          SECRET_ARGS: ${{ steps.invalid_docker_missing_metadata.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.invalid_docker_missing_metadata.outputs.secret_files }}
+          SECRET_ID: ${{ steps.invalid_docker_missing_metadata.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.invalid_docker_missing_metadata.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+          test -z "$SECRET_ARGS"
+          test -z "$SECRET_FILES"
+          test -z "$SECRET_ID"
+          test -z "$SECRET_PATH"
+
+      - id: invalid_docker_unsupported_protocol
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/unsupported
+          purpose: docker-build
+
+      - name: Check Docker metadata validation rejects unsupported protocols
+        env:
+          OUTCOME: ${{ steps.invalid_docker_unsupported_protocol.outcome }}
+          SECRET_ARGS: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_files }}
+          SECRET_ID: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+          test -z "$SECRET_ARGS"
+          test -z "$SECRET_FILES"
+          test -z "$SECRET_ID"
+          test -z "$SECRET_PATH"
 
       - name: Create npm Docker smoke file
         run: |
