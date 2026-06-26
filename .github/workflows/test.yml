@@ -405,6 +405,32 @@ jobs:
       - name: Build PyPI Docker smoke with secret_args
         run: docker buildx build ${{ steps.docker_pypi_token.outputs.secret_args }} -f Dockerfile.packagemaze-pypi-smoke .
 
+      - name: Create multi-feed Docker smoke file
+        run: |
+          cat > Dockerfile.packagemaze-multi-smoke <<'DOCKERFILE'
+          # syntax=docker/dockerfile:1.7
+          FROM alpine:3.20
+          RUN --mount=type=secret,id=packagemaze_npm \
+              --mount=type=secret,id=packagemaze_pypi \
+              . /run/secrets/packagemaze_npm && \
+              . /run/secrets/packagemaze_pypi && \
+              test -f "$NPM_CONFIG_USERCONFIG" && \
+              test -f "$PIP_CONFIG_FILE" && \
+              grep -q "fake-docker-token" "$NPM_CONFIG_USERCONFIG" && \
+              grep -q "fake-pypi-docker-token" "$PIP_CONFIG_FILE"
+          RUN if grep -R "fake-docker-token" /tmp 2>/dev/null; then exit 1; fi && \
+              if grep -R "fake-pypi-docker-token" /tmp 2>/dev/null; then exit 1; fi
+          DOCKERFILE
+
+      - name: Build multi-feed Docker smoke with secret-files
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.packagemaze-multi-smoke
+          secret-files: |
+            ${{ steps.docker_token.outputs.secret_files }}
+            ${{ steps.docker_pypi_token.outputs.secret_files }}
+
       - name: Check action avoids Bash 4-only lowercase expansion
         run: |
           set -euo pipefail

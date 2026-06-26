@@ -239,8 +239,20 @@ runs:
             fi
             secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-npm.XXXXXXXX")"
             {
+              printf 'packagemaze_docker_cleanup() {\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_IFS="$IFS"\n'
+              printf '  IFS=:\n'
+              printf '  for packagemaze_docker_config_dir in ${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}; do\n'
+              printf '    [ -n "$packagemaze_docker_config_dir" ] && rm -rf "$packagemaze_docker_config_dir"\n'
+              printf '  done\n'
+              printf '  IFS="$PACKAGEMAZE_DOCKER_CLEANUP_IFS"\n'
+              printf '}\n'
+              printf 'if [ "${PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED:-}" != "1" ]; then\n'
+              printf '  trap packagemaze_docker_cleanup EXIT\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED=1\n'
+              printf 'fi\n'
               printf 'PACKAGEMAZE_NPM_CONFIG_DIR="$(mktemp -d)"\n'
-              printf 'trap '\''rm -rf "$PACKAGEMAZE_NPM_CONFIG_DIR"'\'' EXIT\n'
+              printf 'PACKAGEMAZE_DOCKER_CONFIG_DIRS="${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}:$PACKAGEMAZE_NPM_CONFIG_DIR"\n'
               printf 'cat > "$PACKAGEMAZE_NPM_CONFIG_DIR/npmrc" <<'\''PACKAGEMAZE_NPMRC'\''\n'
               printf 'registry=%s/\n' "$feed_url"
               printf 'replace-registry-host=always\n'
@@ -270,11 +282,23 @@ runs:
             esac
             secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-pypi.XXXXXXXX")"
             {
+              printf 'packagemaze_docker_cleanup() {\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_IFS="$IFS"\n'
+              printf '  IFS=:\n'
+              printf '  for packagemaze_docker_config_dir in ${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}; do\n'
+              printf '    [ -n "$packagemaze_docker_config_dir" ] && rm -rf "$packagemaze_docker_config_dir"\n'
+              printf '  done\n'
+              printf '  IFS="$PACKAGEMAZE_DOCKER_CLEANUP_IFS"\n'
+              printf '}\n'
+              printf 'if [ "${PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED:-}" != "1" ]; then\n'
+              printf '  trap packagemaze_docker_cleanup EXIT\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED=1\n'
+              printf 'fi\n'
               printf 'PACKAGEMAZE_PYPI_TOKEN=%s\n' "$(shell_quote "$PACKAGE_MAZE_TOKEN")"
               printf 'PACKAGEMAZE_PIP_CONFIG_DIR="$(mktemp -d)"\n'
+              printf 'PACKAGEMAZE_DOCKER_CONFIG_DIRS="${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}:$PACKAGEMAZE_PIP_CONFIG_DIR"\n'
               printf 'PACKAGEMAZE_PYPI_INDEX_SCHEME=%s\n' "$(shell_quote "$feed_scheme")"
               printf 'PACKAGEMAZE_PYPI_AUTH_PATH=%s\n' "$(shell_quote "$auth_path")"
-              printf 'trap '\''rm -rf "$PACKAGEMAZE_PIP_CONFIG_DIR"'\'' EXIT\n'
               printf 'printf '\''[global]\\nindex-url = %%s://__token__:%%s@%%s/simple/\\n'\'' "$PACKAGEMAZE_PYPI_INDEX_SCHEME" "$PACKAGEMAZE_PYPI_TOKEN" "$PACKAGEMAZE_PYPI_AUTH_PATH" > "$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
               printf 'export PIP_CONFIG_FILE="$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
               printf 'export PIP_INDEX_URL="${PACKAGEMAZE_PYPI_INDEX_SCHEME}://__token__:${PACKAGEMAZE_PYPI_TOKEN}@${PACKAGEMAZE_PYPI_AUTH_PATH}/simple/"\n'

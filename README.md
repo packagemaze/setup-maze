@@ -119,6 +119,10 @@ per Feed and list each `secret_files` output directly under the same
       ${{ steps.maze-pypi-docker.outputs.secret_files }}
 ```
 
+If one Dockerfile `RUN` sources more than one generated bundle, setup-maze uses
+shared cleanup so every tokenized temp config is removed before that layer is
+committed.
+
 For target-specific Docker builds, PackageMaze review currently fails closed
 because it cannot prove which Dockerfile stages are reached. To be review-ready,
 either use a non-target build or pass all generated bundle outputs required
