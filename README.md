@@ -96,9 +96,9 @@ installs need first-class bundle support before PackageMaze can treat them as
 complete.
 
 If one Docker build needs two Feeds that use the same Artifact Protocol, keep
-one setup-maze step per Feed and give each step a distinct protocol-matched
-`secret-id`, such as `packagemaze_npm_web` and `packagemaze_npm_admin`.
-Use those ids in the matching Dockerfile mounts.
+one setup-maze step per Feed and give each step a distinct lowercase,
+protocol-matched `secret-id`, such as `packagemaze_npm_web` and
+`packagemaze_npm_admin`. Use those ids in the matching Dockerfile mounts.
 
 Publish tokens require the Feed and package name:
 
