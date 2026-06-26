@@ -51,6 +51,12 @@ jobs:
             "auth exchange-oidc --feed org/missing-metadata --purpose docker-build --format shell")
               write_shell_exchange fake-missing-metadata-token org/missing-metadata "" npm
               ;;
+            "auth exchange-oidc --feed org/old-cli --purpose docker-build --format shell")
+              printf 'export MAZE_TOKEN=%s\n' "'fake-old-cli-token'"
+              printf 'export MAZE_TOKEN_EXPIRES_AT=%s\n' "'2026-06-26T00:15:00Z'"
+              printf 'export MAZE_FEED=%s\n' "'org/old-cli'"
+              printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
+              ;;
             "auth exchange-oidc --feed org/unsupported --purpose docker-build --format shell")
               write_shell_exchange fake-unsupported-token org/unsupported https://pkg.packagemaze.com/org/unsupported maven
               ;;
@@ -215,6 +221,22 @@ jobs:
           set -euo pipefail
           test "$OUTCOME" = "failure"
 
+      - id: invalid_docker_upper_custom_secret_id
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: docker-build
+          secret-id: packagemaze_npm_Admin
+
+      - name: Check Docker secret id validation rejects uppercase custom ids
+        env:
+          OUTCOME: ${{ steps.invalid_docker_upper_custom_secret_id.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
       - id: invalid_docker_missing_metadata
         uses: ./
         continue-on-error: true
@@ -230,6 +252,29 @@ jobs:
           SECRET_FILES: ${{ steps.invalid_docker_missing_metadata.outputs.secret_files }}
           SECRET_ID: ${{ steps.invalid_docker_missing_metadata.outputs.secret_id }}
           SECRET_PATH: ${{ steps.invalid_docker_missing_metadata.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+          test -z "$SECRET_ARGS"
+          test -z "$SECRET_FILES"
+          test -z "$SECRET_ID"
+          test -z "$SECRET_PATH"
+
+      - id: invalid_docker_absent_metadata
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/old-cli
+          purpose: docker-build
+
+      - name: Check Docker metadata validation handles absent old CLI metadata
+        env:
+          OUTCOME: ${{ steps.invalid_docker_absent_metadata.outcome }}
+          SECRET_ARGS: ${{ steps.invalid_docker_absent_metadata.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.invalid_docker_absent_metadata.outputs.secret_files }}
+          SECRET_ID: ${{ steps.invalid_docker_absent_metadata.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.invalid_docker_absent_metadata.outputs.secret_path }}
         run: |
           set -euo pipefail
           test "$OUTCOME" = "failure"
@@ -359,6 +404,11 @@ jobs:
 
       - name: Build PyPI Docker smoke with secret_args
         run: docker buildx build ${{ steps.docker_pypi_token.outputs.secret_args }} -f Dockerfile.packagemaze-pypi-smoke .
+
+      - name: Check action avoids Bash 4-only lowercase expansion
+        run: |
+          set -euo pipefail
+          ! grep -n '\${[^}]*,,}' action.yml
 
       - id: invalid_package
         uses: ./

@@ -195,9 +195,9 @@ runs:
         . "$exchange_file"
         rm -f "$exchange_file"
 
-        PACKAGE_MAZE_TOKEN="$MAZE_TOKEN"
-        FEED_BASE_URL="$MAZE_FEED_BASE_URL"
-        FEED_PROTOCOL="$MAZE_ARTIFACT_PROTOCOL"
+        PACKAGE_MAZE_TOKEN="${MAZE_TOKEN:-}"
+        FEED_BASE_URL="${MAZE_FEED_BASE_URL:-}"
+        FEED_PROTOCOL="${MAZE_ARTIFACT_PROTOCOL:-}"
         printf '::add-mask::%s\n' "$PACKAGE_MAZE_TOKEN"
         unset MAZE_TOKEN MAZE_TOKEN_EXPIRES_AT MAZE_FEED MAZE_FEED_BASE_URL MAZE_PURPOSE MAZE_ARTIFACT_PROTOCOL
 
@@ -228,11 +228,11 @@ runs:
             if [ -n "$REQUESTED_SECRET_ID" ]; then
               secret_id="$REQUESTED_SECRET_ID"
             fi
-            if [[ ! "$secret_id" =~ ^packagemaze[_-]npm([_.-][A-Za-z0-9]+)*$ ]]; then
-              printf 'Docker npm secret-id must be packagemaze_npm or a packagemaze_npm-prefixed id.\n' >&2
+            if [[ ! "$secret_id" =~ ^packagemaze[_-]npm([_.-][a-z0-9]+)*$ ]]; then
+              printf 'Docker npm secret-id must be packagemaze_npm or a lowercase packagemaze_npm-prefixed id.\n' >&2
               exit 1
             fi
-            secret_id_lower="${secret_id,,}"
+            secret_id_lower="$(printf '%s' "$secret_id" | tr '[:upper:]' '[:lower:]')"
             if [[ "$secret_id_lower" =~ (^|[_.-])token([_.-]|$) ]]; then
               printf 'Docker npm secret-id must not include a token segment; use a bundle id such as packagemaze_npm or packagemaze_npm_web.\n' >&2
               exit 1
@@ -255,11 +255,11 @@ runs:
             if [ -n "$REQUESTED_SECRET_ID" ]; then
               secret_id="$REQUESTED_SECRET_ID"
             fi
-            if [[ ! "$secret_id" =~ ^packagemaze[_-]pypi([_.-][A-Za-z0-9]+)*$ ]]; then
-              printf 'Docker PyPI secret-id must be packagemaze_pypi or a packagemaze_pypi-prefixed id.\n' >&2
+            if [[ ! "$secret_id" =~ ^packagemaze[_-]pypi([_.-][a-z0-9]+)*$ ]]; then
+              printf 'Docker PyPI secret-id must be packagemaze_pypi or a lowercase packagemaze_pypi-prefixed id.\n' >&2
               exit 1
             fi
-            secret_id_lower="${secret_id,,}"
+            secret_id_lower="$(printf '%s' "$secret_id" | tr '[:upper:]' '[:lower:]')"
             if [[ "$secret_id_lower" =~ (^|[_.-])token([_.-]|$) ]]; then
               printf 'Docker PyPI secret-id must not include a token segment; use a bundle id such as packagemaze_pypi or packagemaze_pypi_api.\n' >&2
               exit 1

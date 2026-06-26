@@ -86,13 +86,14 @@ RUN --mount=type=secret,id=packagemaze_pypi \
     . /run/secrets/packagemaze_pypi && pip install -r requirements.txt
 ```
 
-The generated PyPI bundle also exports pip and uv index settings for the same
-PackageMaze Feed during that `RUN` instruction. Docker bundles do not expose a
-generic `MAZE_TOKEN` environment variable.
+The generated PyPI bundle also exports pip and `uv pip` index settings for the
+same PackageMaze Feed during that `RUN` instruction. Docker bundles do not
+expose a generic `MAZE_TOKEN` environment variable.
 
-Docker bundles currently complete npm/pnpm installs for npm Feeds and pip/uv
-installs for PyPI Feeds. Yarn, Bun, Poetry, and PDM Docker installs need
-first-class bundle support before PackageMaze can treat them as complete.
+Docker bundles currently complete npm/pnpm installs for npm Feeds and pip or
+`uv pip` installs for PyPI Feeds. `uv sync`, Yarn, Bun, Poetry, and PDM Docker
+installs need first-class bundle support before PackageMaze can treat them as
+complete.
 
 If one Docker build needs two Feeds that use the same Artifact Protocol, keep
 one setup-maze step per Feed and give each step a distinct protocol-matched
