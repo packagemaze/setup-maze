@@ -90,6 +90,12 @@ The generated PyPI bundle also exports pip and `uv pip` index settings for the
 same PackageMaze Feed during that `RUN` instruction. Docker bundles do not
 expose a generic `MAZE_TOKEN` environment variable.
 
+After sourcing a generated Docker bundle, let that bundle own package-client
+configuration for the `RUN`. Do not reset its exported config environment
+variables or pass registry/index/config flags such as `--userconfig`,
+`--registry`, `--@scope:registry`, `--index-url`, `--extra-index-url`,
+`--default-index`, `--index`, `--no-index`, or `--find-links`.
+
 Docker bundles currently complete npm/pnpm installs for npm Feeds and pip or
 `uv pip` installs for PyPI Feeds. `uv sync`, Yarn, Bun, Poetry, and PDM Docker
 installs need first-class bundle support before PackageMaze can treat them as
@@ -122,6 +128,8 @@ per Feed and list each `secret_files` output directly under the same
 If one Dockerfile `RUN` sources more than one generated bundle, setup-maze uses
 shared cleanup so every tokenized temp config is removed before that layer is
 committed.
+After the Docker build, remove each setup-maze step's runner-side `secret_path`
+output.
 
 For target-specific Docker builds, PackageMaze review currently fails closed
 because it cannot prove which Dockerfile stages are reached. To be review-ready,
