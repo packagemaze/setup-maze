@@ -24,10 +24,9 @@ inputs:
   package:
     description: Package name for publish tokens. Only valid with purpose publish.
     required: false
-  package-base-url:
-    description: PackageMaze Package Client base URL used when generating Docker build package-client config.
+  secret-id:
+    description: Optional BuildKit secret id for purpose docker-build. Use a protocol-matched packagemaze_npm_* or packagemaze_pypi_* id only when one Docker build needs multiple same-protocol PackageMaze Feeds.
     required: false
-    default: https://pkg.packagemaze.com
 
 outputs:
   binary:
@@ -48,6 +47,9 @@ outputs:
   secret_id:
     description: BuildKit secret id to mount in Dockerfile for purpose docker-build.
     value: ${{ steps.docker-secrets.outputs.secret_id }}
+  secret_path:
+    description: Runner-temp secret bundle path for purpose docker-build cleanup.
+    value: ${{ steps.docker-secrets.outputs.secret_path }}
 
 runs:
   using: composite
@@ -159,10 +161,10 @@ runs:
       if: ${{ inputs.feed != '' && inputs.purpose == 'docker-build' }}
       shell: bash
       env:
-        FEED: ${{ inputs.feed }}
+        FEED_BASE_URL: ${{ steps.exchange.outputs.feed_base_url }}
         FEED_PROTOCOL: ${{ steps.exchange.outputs.artifact_protocol }}
-        PACKAGE_BASE_URL: ${{ inputs.package-base-url }}
         PACKAGE_MAZE_TOKEN: ${{ steps.exchange.outputs.token }}
+        REQUESTED_SECRET_ID: ${{ inputs.secret-id }}
       run: |
         set -euo pipefail
         umask 077
@@ -171,16 +173,37 @@ runs:
           printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
         }
 
-        feed_path="${FEED#/}"
-        feed_path="${feed_path%/}"
-        package_base_url="${PACKAGE_BASE_URL%/}"
-        feed_url="${package_base_url}/${feed_path}"
+        if [ -z "$FEED_BASE_URL" ]; then
+          printf 'Missing Feed Base URL for docker-build. setup-maze requires maze CLI support for feed_base_url.\n' >&2
+          exit 1
+        fi
+
+        if [[ "$FEED_BASE_URL" == *$'\n'* || "$FEED_BASE_URL" == *$'\r'* ]]; then
+          printf 'Feed Base URL for docker-build contains an invalid newline.\n' >&2
+          exit 1
+        fi
+
+        feed_url="${FEED_BASE_URL%/}"
+        case "$feed_url" in
+          http://* | https://*) ;;
+          *)
+            printf 'Feed Base URL for docker-build must start with http:// or https://.\n' >&2
+            exit 1
+            ;;
+        esac
         auth_path="${feed_url#http://}"
         auth_path="${auth_path#https://}"
 
         case "$FEED_PROTOCOL" in
           npm)
             secret_id="packagemaze_npm"
+            if [ -n "$REQUESTED_SECRET_ID" ]; then
+              secret_id="$REQUESTED_SECRET_ID"
+            fi
+            if [[ ! "$secret_id" =~ ^packagemaze[_-]npm([_.-][A-Za-z0-9]+)*$ ]]; then
+              printf 'Docker npm secret-id must be packagemaze_npm or a packagemaze_npm-prefixed id.\n' >&2
+              exit 1
+            fi
             secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-npm.XXXXXXXX")"
             {
               printf 'export MAZE_TOKEN=%s\n' "$(shell_quote "$PACKAGE_MAZE_TOKEN")"
@@ -198,15 +221,27 @@ runs:
             ;;
           pypi)
             secret_id="packagemaze_pypi"
+            if [ -n "$REQUESTED_SECRET_ID" ]; then
+              secret_id="$REQUESTED_SECRET_ID"
+            fi
+            if [[ ! "$secret_id" =~ ^packagemaze[_-]pypi([_.-][A-Za-z0-9]+)*$ ]]; then
+              printf 'Docker PyPI secret-id must be packagemaze_pypi or a packagemaze_pypi-prefixed id.\n' >&2
+              exit 1
+            fi
+            case "$feed_url" in
+              http://*) feed_scheme="http" ;;
+              https://*) feed_scheme="https" ;;
+            esac
             secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-pypi.XXXXXXXX")"
             {
               printf 'export MAZE_TOKEN=%s\n' "$(shell_quote "$PACKAGE_MAZE_TOKEN")"
               printf 'PACKAGEMAZE_PIP_CONFIG_DIR="$(mktemp -d)"\n'
+              printf 'PACKAGEMAZE_PYPI_INDEX_SCHEME=%s\n' "$(shell_quote "$feed_scheme")"
               printf 'PACKAGEMAZE_PYPI_AUTH_PATH=%s\n' "$(shell_quote "$auth_path")"
               printf 'trap '\''rm -rf "$PACKAGEMAZE_PIP_CONFIG_DIR"'\'' EXIT\n'
-              printf 'printf '\''[global]\\nindex-url = https://__token__:%%s@%%s/simple/\\n'\'' "$MAZE_TOKEN" "$PACKAGEMAZE_PYPI_AUTH_PATH" > "$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
+              printf 'printf '\''[global]\\nindex-url = %%s://__token__:%%s@%%s/simple/\\n'\'' "$PACKAGEMAZE_PYPI_INDEX_SCHEME" "$MAZE_TOKEN" "$PACKAGEMAZE_PYPI_AUTH_PATH" > "$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
               printf 'export PIP_CONFIG_FILE="$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
-              printf 'export PIP_INDEX_URL="https://__token__:${MAZE_TOKEN}@${PACKAGEMAZE_PYPI_AUTH_PATH}/simple/"\n'
+              printf 'export PIP_INDEX_URL="${PACKAGEMAZE_PYPI_INDEX_SCHEME}://__token__:${MAZE_TOKEN}@${PACKAGEMAZE_PYPI_AUTH_PATH}/simple/"\n'
               printf 'export UV_INDEX_URL="$PIP_INDEX_URL"\n'
               printf 'export UV_INDEX_PACKAGEMAZE_USERNAME="__token__"\n'
               printf 'export UV_INDEX_PACKAGEMAZE_PASSWORD="$MAZE_TOKEN"\n'
@@ -228,4 +263,5 @@ runs:
           printf 'PACKAGEMAZE_SECRET_FILES\n'
           printf 'secret_args=--secret id=%s,src=%s\n' "$secret_id" "$(shell_quote "$secret_file")"
           printf 'secret_id=%s\n' "$secret_id"
+          printf 'secret_path=%s\n' "$secret_file"
         } >> "$GITHUB_OUTPUT"

@@ -29,21 +29,31 @@ jobs:
               printf '::add-mask::fake-install-token\n'
               printf 'token=fake-install-token\n' >> "$GITHUB_OUTPUT"
               printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+              printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
               ;;
             "auth exchange-oidc --feed org/feed --purpose docker-build --format github-output")
               printf '::add-mask::fake-docker-token\n'
               printf 'token=fake-docker-token\n' >> "$GITHUB_OUTPUT"
               printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+              printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
+              ;;
+            "auth exchange-oidc --feed org/admin --purpose docker-build --format github-output")
+              printf '::add-mask::fake-admin-docker-token\n'
+              printf 'token=fake-admin-docker-token\n' >> "$GITHUB_OUTPUT"
+              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+              printf 'feed_base_url=https://pkg.packagemaze.com/org/admin\n' >> "$GITHUB_OUTPUT"
               ;;
             "auth exchange-oidc --feed org/pypi --purpose docker-build --format github-output")
               printf '::add-mask::fake-pypi-docker-token\n'
               printf 'token=fake-pypi-docker-token\n' >> "$GITHUB_OUTPUT"
               printf 'artifact_protocol=pypi\n' >> "$GITHUB_OUTPUT"
+              printf 'feed_base_url=http://pkg.packagemaze.test/org/pypi\n' >> "$GITHUB_OUTPUT"
               ;;
             "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
               printf '::add-mask::fake-publish-token\n'
               printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
               printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+              printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
               ;;
             *) printf 'unexpected args: %s\n' "$*" >&2; exit 2 ;;
           esac
@@ -116,14 +126,36 @@ jobs:
           SECRET_ARGS: ${{ steps.docker_token.outputs.secret_args }}
           SECRET_FILES: ${{ steps.docker_token.outputs.secret_files }}
           SECRET_ID: ${{ steps.docker_token.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.docker_token.outputs.secret_path }}
           TOKEN: ${{ steps.docker_token.outputs.token }}
         run: |
           set -euo pipefail
           test -z "$TOKEN"
           test "$SECRET_ID" = "packagemaze_npm"
           test -n "$SECRET_ARGS"
-          test -f "${SECRET_FILES#packagemaze_npm=}"
-          grep -q "fake-docker-token" "${SECRET_FILES#packagemaze_npm=}"
+          test -f "$SECRET_PATH"
+          test "${SECRET_FILES#packagemaze_npm=}" = "$SECRET_PATH"
+          grep -q "fake-docker-token" "$SECRET_PATH"
+          grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$SECRET_PATH"
+
+      - id: docker_admin_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/admin
+          purpose: docker-build
+          secret-id: packagemaze_npm_admin
+
+      - name: Check custom Docker secret id output
+        env:
+          SECRET_FILES: ${{ steps.docker_admin_token.outputs.secret_files }}
+          SECRET_ID: ${{ steps.docker_admin_token.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.docker_admin_token.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$SECRET_ID" = "packagemaze_npm_admin"
+          test "${SECRET_FILES#packagemaze_npm_admin=}" = "$SECRET_PATH"
+          grep -q "registry=https://pkg.packagemaze.com/org/admin/" "$SECRET_PATH"
 
       - id: docker_pypi_token
         uses: ./
@@ -137,14 +169,17 @@ jobs:
           SECRET_ARGS: ${{ steps.docker_pypi_token.outputs.secret_args }}
           SECRET_FILES: ${{ steps.docker_pypi_token.outputs.secret_files }}
           SECRET_ID: ${{ steps.docker_pypi_token.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.docker_pypi_token.outputs.secret_path }}
           TOKEN: ${{ steps.docker_pypi_token.outputs.token }}
         run: |
           set -euo pipefail
           test -z "$TOKEN"
           test "$SECRET_ID" = "packagemaze_pypi"
           test -n "$SECRET_ARGS"
-          test -f "${SECRET_FILES#packagemaze_pypi=}"
-          grep -q "fake-pypi-docker-token" "${SECRET_FILES#packagemaze_pypi=}"
+          test -f "$SECRET_PATH"
+          test "${SECRET_FILES#packagemaze_pypi=}" = "$SECRET_PATH"
+          grep -q "fake-pypi-docker-token" "$SECRET_PATH"
+          grep -q "http://__token__:" "$SECRET_PATH"
 
       - id: invalid_package
         uses: ./
