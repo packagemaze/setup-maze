@@ -22,16 +22,49 @@ jobs:
           cat > fake-bin/maze <<'SCRIPT'
           #!/usr/bin/env bash
           set -euo pipefail
+          write_shell_exchange() {
+            printf 'export MAZE_TOKEN=%s\n' "'$1'"
+            printf 'export MAZE_TOKEN_EXPIRES_AT=%s\n' "'2026-06-26T00:15:00Z'"
+            printf 'export MAZE_FEED=%s\n' "'$2'"
+            printf 'export MAZE_FEED_BASE_URL=%s\n' "'$3'"
+            printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
+            printf 'export MAZE_ARTIFACT_PROTOCOL=%s\n' "'$4'"
+          }
           case "$*" in
             "version") printf 'maze smoke\n' ;;
             "auth exchange-oidc --help") printf 'Exchange a CI OIDC identity token\n' ;;
             "auth exchange-oidc --feed org/feed --purpose install --format github-output")
               printf '::add-mask::fake-install-token\n'
               printf 'token=fake-install-token\n' >> "$GITHUB_OUTPUT"
+              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+              printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
+              ;;
+            "auth exchange-oidc --feed org/feed --purpose docker-build --format shell")
+              write_shell_exchange fake-docker-token org/feed https://pkg.packagemaze.com/org/feed npm
+              ;;
+            "auth exchange-oidc --feed org/admin --purpose docker-build --format shell")
+              write_shell_exchange fake-admin-docker-token org/admin https://pkg.packagemaze.com/org/admin npm
+              ;;
+            "auth exchange-oidc --feed org/pypi --purpose docker-build --format shell")
+              write_shell_exchange fake-pypi-docker-token org/pypi http://pkg.packagemaze.test/org/pypi pypi
+              ;;
+            "auth exchange-oidc --feed org/missing-metadata --purpose docker-build --format shell")
+              write_shell_exchange fake-missing-metadata-token org/missing-metadata "" npm
+              ;;
+            "auth exchange-oidc --feed org/old-cli --purpose docker-build --format shell")
+              printf 'export MAZE_TOKEN=%s\n' "'fake-old-cli-token'"
+              printf 'export MAZE_TOKEN_EXPIRES_AT=%s\n' "'2026-06-26T00:15:00Z'"
+              printf 'export MAZE_FEED=%s\n' "'org/old-cli'"
+              printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
+              ;;
+            "auth exchange-oidc --feed org/unsupported --purpose docker-build --format shell")
+              write_shell_exchange fake-unsupported-token org/unsupported https://pkg.packagemaze.com/org/unsupported maven
               ;;
             "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
               printf '::add-mask::fake-publish-token\n'
               printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
+              printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+              printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
               ;;
             *) printf 'unexpected args: %s\n' "$*" >&2; exit 2 ;;
           esac
@@ -92,6 +125,317 @@ jobs:
           set -euo pipefail
           test "$TOKEN" = "fake-publish-token"
 
+      - id: invalid_publish_missing_inputs
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          purpose: publish
+
+      - name: Check publish validation requires feed and package
+        env:
+          OUTCOME: ${{ steps.invalid_publish_missing_inputs.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: invalid_publish_missing_package
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: publish
+
+      - name: Check publish validation requires package
+        env:
+          OUTCOME: ${{ steps.invalid_publish_missing_package.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: docker_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: docker-build
+
+      - name: Check Docker secret outputs
+        env:
+          SECRET_ARGS: ${{ steps.docker_token.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.docker_token.outputs.secret_files }}
+          SECRET_ID: ${{ steps.docker_token.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.docker_token.outputs.secret_path }}
+          TOKEN: ${{ steps.docker_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          test -z "$TOKEN"
+          test "$SECRET_ID" = "packagemaze_npm"
+          test -n "$SECRET_ARGS"
+          test -f "$SECRET_PATH"
+          test "${SECRET_FILES#packagemaze_npm=}" = "$SECRET_PATH"
+          grep -q "fake-docker-token" "$SECRET_PATH"
+          grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$SECRET_PATH"
+          ! grep -q "MAZE_TOKEN" "$SECRET_PATH"
+          ! grep -q "COREPACK_NPM_TOKEN" "$SECRET_PATH"
+          (
+            . "$SECRET_PATH"
+            test -z "${MAZE_TOKEN:-}"
+            test -f "$NPM_CONFIG_USERCONFIG"
+            grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$NPM_CONFIG_USERCONFIG"
+            grep -q "fake-docker-token" "$NPM_CONFIG_USERCONFIG"
+            test "$COREPACK_NPM_REGISTRY" = "https://pkg.packagemaze.com/org/feed/"
+            test -z "${COREPACK_NPM_TOKEN:-}"
+          )
+
+      - id: invalid_docker_token_secret_id
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: docker-build
+          secret-id: packagemaze_npm_token
+
+      - name: Check Docker secret id validation rejects token-looking ids
+        env:
+          OUTCOME: ${{ steps.invalid_docker_token_secret_id.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: invalid_docker_upper_token_secret_id
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: docker-build
+          secret-id: packagemaze_npm_TOKEN
+
+      - name: Check Docker secret id validation rejects uppercase token ids
+        env:
+          OUTCOME: ${{ steps.invalid_docker_upper_token_secret_id.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: invalid_docker_upper_custom_secret_id
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          purpose: docker-build
+          secret-id: packagemaze_npm_Admin
+
+      - name: Check Docker secret id validation rejects uppercase custom ids
+        env:
+          OUTCOME: ${{ steps.invalid_docker_upper_custom_secret_id.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: invalid_docker_missing_metadata
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/missing-metadata
+          purpose: docker-build
+
+      - name: Check Docker metadata validation requires feed base URL
+        env:
+          OUTCOME: ${{ steps.invalid_docker_missing_metadata.outcome }}
+          SECRET_ARGS: ${{ steps.invalid_docker_missing_metadata.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.invalid_docker_missing_metadata.outputs.secret_files }}
+          SECRET_ID: ${{ steps.invalid_docker_missing_metadata.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.invalid_docker_missing_metadata.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+          test -z "$SECRET_ARGS"
+          test -z "$SECRET_FILES"
+          test -z "$SECRET_ID"
+          test -z "$SECRET_PATH"
+
+      - id: invalid_docker_absent_metadata
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/old-cli
+          purpose: docker-build
+
+      - name: Check Docker metadata validation handles absent old CLI metadata
+        env:
+          OUTCOME: ${{ steps.invalid_docker_absent_metadata.outcome }}
+          SECRET_ARGS: ${{ steps.invalid_docker_absent_metadata.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.invalid_docker_absent_metadata.outputs.secret_files }}
+          SECRET_ID: ${{ steps.invalid_docker_absent_metadata.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.invalid_docker_absent_metadata.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+          test -z "$SECRET_ARGS"
+          test -z "$SECRET_FILES"
+          test -z "$SECRET_ID"
+          test -z "$SECRET_PATH"
+
+      - id: invalid_docker_unsupported_protocol
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/unsupported
+          purpose: docker-build
+
+      - name: Check Docker metadata validation rejects unsupported protocols
+        env:
+          OUTCOME: ${{ steps.invalid_docker_unsupported_protocol.outcome }}
+          SECRET_ARGS: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_files }}
+          SECRET_ID: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.invalid_docker_unsupported_protocol.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+          test -z "$SECRET_ARGS"
+          test -z "$SECRET_FILES"
+          test -z "$SECRET_ID"
+          test -z "$SECRET_PATH"
+
+      - name: Create npm Docker smoke file
+        run: |
+          cat > Dockerfile.packagemaze-npm-smoke <<'DOCKERFILE'
+          # syntax=docker/dockerfile:1.7
+          FROM alpine:3.20
+          RUN --mount=type=secret,id=packagemaze_npm \
+              . /run/secrets/packagemaze_npm && \
+              test -z "${MAZE_TOKEN:-}" && \
+              test -f "$NPM_CONFIG_USERCONFIG" && \
+              grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$NPM_CONFIG_USERCONFIG" && \
+              grep -q "fake-docker-token" "$NPM_CONFIG_USERCONFIG" && \
+              test "$COREPACK_NPM_REGISTRY" = "https://pkg.packagemaze.com/org/feed/" && \
+              test -z "${COREPACK_NPM_TOKEN:-}"
+          DOCKERFILE
+
+      - name: Build npm Docker smoke with secret-files
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.packagemaze-npm-smoke
+          secret-files: ${{ steps.docker_token.outputs.secret_files }}
+
+      - id: docker_admin_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/admin
+          purpose: docker-build
+          secret-id: packagemaze_npm_admin
+
+      - name: Check custom Docker secret id output
+        env:
+          SECRET_FILES: ${{ steps.docker_admin_token.outputs.secret_files }}
+          SECRET_ID: ${{ steps.docker_admin_token.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.docker_admin_token.outputs.secret_path }}
+        run: |
+          set -euo pipefail
+          test "$SECRET_ID" = "packagemaze_npm_admin"
+          test "${SECRET_FILES#packagemaze_npm_admin=}" = "$SECRET_PATH"
+          grep -q "registry=https://pkg.packagemaze.com/org/admin/" "$SECRET_PATH"
+
+      - id: docker_pypi_token
+        uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/pypi
+          purpose: docker-build
+
+      - name: Check Docker PyPI secret outputs
+        env:
+          SECRET_ARGS: ${{ steps.docker_pypi_token.outputs.secret_args }}
+          SECRET_FILES: ${{ steps.docker_pypi_token.outputs.secret_files }}
+          SECRET_ID: ${{ steps.docker_pypi_token.outputs.secret_id }}
+          SECRET_PATH: ${{ steps.docker_pypi_token.outputs.secret_path }}
+          TOKEN: ${{ steps.docker_pypi_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          test -z "$TOKEN"
+          test "$SECRET_ID" = "packagemaze_pypi"
+          test -n "$SECRET_ARGS"
+          test -f "$SECRET_PATH"
+          test "${SECRET_FILES#packagemaze_pypi=}" = "$SECRET_PATH"
+          grep -q "fake-pypi-docker-token" "$SECRET_PATH"
+          grep -q "PACKAGEMAZE_PYPI_INDEX_SCHEME='http'" "$SECRET_PATH"
+          ! grep -q "MAZE_TOKEN" "$SECRET_PATH"
+          ! grep -q "UV_INDEX_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"
+          ! grep -q "POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"
+          (
+            . "$SECRET_PATH"
+            test -z "${MAZE_TOKEN:-}"
+            test -z "${PACKAGEMAZE_PYPI_TOKEN:-}"
+            test "$PACKAGEMAZE_PYPI_INDEX_SCHEME" = "http"
+            test -f "$PIP_CONFIG_FILE"
+            grep -q "pkg.packagemaze.test/org/pypi/simple/" "$PIP_CONFIG_FILE"
+            case "$PIP_INDEX_URL" in
+              http://__token__:*@pkg.packagemaze.test/org/pypi/simple/) ;;
+              *) exit 1 ;;
+            esac
+            test "$UV_INDEX_URL" = "$PIP_INDEX_URL"
+          )
+
+      - name: Create PyPI Docker smoke file
+        run: |
+          cat > Dockerfile.packagemaze-pypi-smoke <<'DOCKERFILE'
+          # syntax=docker/dockerfile:1.7
+          FROM alpine:3.20
+          RUN --mount=type=secret,id=packagemaze_pypi \
+              . /run/secrets/packagemaze_pypi && \
+              test -z "${MAZE_TOKEN:-}" && \
+              test -z "${PACKAGEMAZE_PYPI_TOKEN:-}" && \
+              test "$PACKAGEMAZE_PYPI_INDEX_SCHEME" = "http" && \
+              test -f "$PIP_CONFIG_FILE" && \
+              grep -q "pkg.packagemaze.test/org/pypi/simple/" "$PIP_CONFIG_FILE" && \
+              test "$UV_INDEX_URL" = "$PIP_INDEX_URL"
+          DOCKERFILE
+
+      - name: Build PyPI Docker smoke with secret_args
+        run: docker buildx build ${{ steps.docker_pypi_token.outputs.secret_args }} -f Dockerfile.packagemaze-pypi-smoke .
+
+      - name: Create multi-feed Docker smoke file
+        run: |
+          cat > Dockerfile.packagemaze-multi-smoke <<'DOCKERFILE'
+          # syntax=docker/dockerfile:1.7
+          FROM alpine:3.20
+          RUN --mount=type=secret,id=packagemaze_npm \
+              --mount=type=secret,id=packagemaze_pypi \
+              . /run/secrets/packagemaze_npm && \
+              . /run/secrets/packagemaze_pypi && \
+              test -f "$NPM_CONFIG_USERCONFIG" && \
+              test -f "$PIP_CONFIG_FILE" && \
+              grep -q "fake-docker-token" "$NPM_CONFIG_USERCONFIG" && \
+              grep -q "fake-pypi-docker-token" "$PIP_CONFIG_FILE"
+          RUN if grep -R "fake-docker-token" /tmp 2>/dev/null; then exit 1; fi && \
+              if grep -R "fake-pypi-docker-token" /tmp 2>/dev/null; then exit 1; fi
+          DOCKERFILE
+
+      - name: Build multi-feed Docker smoke with secret-files
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.packagemaze-multi-smoke
+          secret-files: |
+            ${{ steps.docker_token.outputs.secret_files }}
+            ${{ steps.docker_pypi_token.outputs.secret_files }}
+
+      - name: Check action avoids Bash 4-only lowercase expansion
+        run: |
+          set -euo pipefail
+          ! grep -n '\${[^}]*,,}' action.yml
+
       - id: invalid_package
         uses: ./
         continue-on-error: true
@@ -107,9 +451,26 @@ jobs:
           set -euo pipefail
           test "$OUTCOME" = "failure"
 
-      - uses: ./
+      - id: invalid_secret_id
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          feed: org/feed
+          secret-id: packagemaze_npm
 
-      - name: Smoke default release install
+      - name: Check secret-id validation
+        env:
+          OUTCOME: ${{ steps.invalid_secret_id.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - uses: ./
+        with:
+          release-base-url: http://127.0.0.1:8765
+
+      - name: Smoke release install
         run: maze auth exchange-oidc --help
 
       - name: Stop fake release server

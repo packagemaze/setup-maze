@@ -4,7 +4,7 @@ description: Install the PackageMaze maze CLI
 inputs:
   version:
     description: PackageMaze CLI release tag to install.
-    default: v0.0.1
+    default: v0.0.2
   repository:
     description: GitHub repository that publishes maze CLI release assets.
     default: packagemaze/maze-cli
@@ -22,7 +22,10 @@ inputs:
     required: false
     default: install
   package:
-    description: Package name for publish tokens. Only valid with purpose publish.
+    description: Package name for publish tokens. Required with purpose publish.
+    required: false
+  secret-id:
+    description: Optional BuildKit secret id for purpose docker-build. Use a lowercase protocol-matched packagemaze_npm_* or packagemaze_pypi_* bundle id only when one Docker build needs multiple same-protocol PackageMaze Feeds. Do not include a token segment.
     required: false
 
 outputs:
@@ -33,8 +36,20 @@ outputs:
     description: Directory added to PATH.
     value: ${{ steps.install.outputs.path }}
   token:
-    description: PackageMaze token when feed is set.
-    value: ${{ steps.exchange.outputs.token }}
+    description: PackageMaze token for non-Docker package-client steps when feed is set.
+    value: ${{ steps.token-output.outputs.token }}
+  secret_files:
+    description: docker/build-push-action secret-files value for purpose docker-build.
+    value: ${{ steps.docker-secrets.outputs.secret_files }}
+  secret_args:
+    description: docker buildx build --secret arguments for purpose docker-build.
+    value: ${{ steps.docker-secrets.outputs.secret_args }}
+  secret_id:
+    description: BuildKit secret id to mount in Dockerfile for purpose docker-build.
+    value: ${{ steps.docker-secrets.outputs.secret_id }}
+  secret_path:
+    description: Runner-temp secret bundle path for purpose docker-build cleanup.
+    value: ${{ steps.docker-secrets.outputs.secret_path }}
 
 runs:
   using: composite
@@ -91,17 +106,38 @@ runs:
         printf 'path=%s\n' "$install_dir" >> "$GITHUB_OUTPUT"
 
     - id: validate-token-inputs
-      if: ${{ inputs.feed != '' || inputs.package != '' }}
+      if: ${{ inputs.feed != '' || inputs.package != '' || inputs.secret-id != '' || inputs.purpose == 'docker-build' || inputs.purpose == 'publish' }}
       shell: bash
       env:
         FEED: ${{ inputs.feed }}
         PACKAGE_NAME: ${{ inputs.package }}
         PURPOSE: ${{ inputs.purpose }}
+        SECRET_ID: ${{ inputs.secret-id }}
       run: |
         set -euo pipefail
 
+        if [ "$PURPOSE" = "docker-build" ] && [ -z "$FEED" ]; then
+          printf 'The docker-build purpose requires feed so setup-maze can request a Docker build token.\n' >&2
+          exit 1
+        fi
+
+        if [ "$PURPOSE" = "publish" ] && [ -z "$FEED" ]; then
+          printf 'The publish purpose requires feed so setup-maze can request a publish token.\n' >&2
+          exit 1
+        fi
+
+        if [ "$PURPOSE" = "publish" ] && [ -z "$PACKAGE_NAME" ]; then
+          printf 'The publish purpose requires package so PackageMaze can scope the publish token.\n' >&2
+          exit 1
+        fi
+
         if [ -n "$PACKAGE_NAME" ] && [ "$PURPOSE" != "publish" ]; then
           printf 'The package input is only valid with purpose: publish.\n' >&2
+          exit 1
+        fi
+
+        if [ -n "$SECRET_ID" ] && [ "$PURPOSE" != "docker-build" ]; then
+          printf 'The secret-id input is only valid with purpose: docker-build.\n' >&2
           exit 1
         fi
 
@@ -111,7 +147,7 @@ runs:
         fi
 
     - id: exchange
-      if: ${{ inputs.feed != '' }}
+      if: ${{ inputs.feed != '' && inputs.purpose != 'docker-build' }}
       shell: bash
       env:
         FEED: ${{ inputs.feed }}
@@ -127,3 +163,162 @@ runs:
         fi
 
         "$MAZE_BINARY" "${args[@]}"
+
+    - id: token-output
+      if: ${{ inputs.feed != '' && inputs.purpose != 'docker-build' }}
+      shell: bash
+      env:
+        PACKAGE_MAZE_TOKEN: ${{ steps.exchange.outputs.token }}
+      run: |
+        set -euo pipefail
+        printf 'token=%s\n' "$PACKAGE_MAZE_TOKEN" >> "$GITHUB_OUTPUT"
+
+    - id: docker-secrets
+      if: ${{ inputs.feed != '' && inputs.purpose == 'docker-build' }}
+      shell: bash
+      env:
+        FEED: ${{ inputs.feed }}
+        MAZE_BINARY: ${{ steps.install.outputs.binary }}
+        REQUESTED_SECRET_ID: ${{ inputs.secret-id }}
+      run: |
+        set -euo pipefail
+        umask 077
+
+        shell_quote() {
+          printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+        }
+
+        exchange_file="$(mktemp "${RUNNER_TEMP}/packagemaze-exchange.XXXXXXXX")"
+        trap 'rm -f "$exchange_file"' EXIT
+        "$MAZE_BINARY" auth exchange-oidc --feed "$FEED" --purpose docker-build --format shell > "$exchange_file"
+        # shellcheck disable=SC1090
+        . "$exchange_file"
+        rm -f "$exchange_file"
+
+        PACKAGE_MAZE_TOKEN="${MAZE_TOKEN:-}"
+        FEED_BASE_URL="${MAZE_FEED_BASE_URL:-}"
+        FEED_PROTOCOL="${MAZE_ARTIFACT_PROTOCOL:-}"
+        printf '::add-mask::%s\n' "$PACKAGE_MAZE_TOKEN"
+        unset MAZE_TOKEN MAZE_TOKEN_EXPIRES_AT MAZE_FEED MAZE_FEED_BASE_URL MAZE_PURPOSE MAZE_ARTIFACT_PROTOCOL
+
+        if [ -z "$FEED_BASE_URL" ]; then
+          printf 'Docker bundles need maze CLI v0.0.2+ so setup-maze can receive the Feed Base URL.\n' >&2
+          exit 1
+        fi
+
+        if [[ "$FEED_BASE_URL" == *$'\n'* || "$FEED_BASE_URL" == *$'\r'* ]]; then
+          printf 'Feed Base URL for docker-build contains an invalid newline.\n' >&2
+          exit 1
+        fi
+
+        feed_url="${FEED_BASE_URL%/}"
+        case "$feed_url" in
+          http://* | https://*) ;;
+          *)
+            printf 'Feed Base URL for docker-build must start with http:// or https://.\n' >&2
+            exit 1
+            ;;
+        esac
+        auth_path="${feed_url#http://}"
+        auth_path="${auth_path#https://}"
+
+        case "$FEED_PROTOCOL" in
+          npm)
+            secret_id="packagemaze_npm"
+            if [ -n "$REQUESTED_SECRET_ID" ]; then
+              secret_id="$REQUESTED_SECRET_ID"
+            fi
+            if [[ ! "$secret_id" =~ ^packagemaze[_-]npm([_.-][a-z0-9]+)*$ ]]; then
+              printf 'Docker npm secret-id must be packagemaze_npm or a lowercase packagemaze_npm-prefixed id.\n' >&2
+              exit 1
+            fi
+            secret_id_lower="$(printf '%s' "$secret_id" | tr '[:upper:]' '[:lower:]')"
+            if [[ "$secret_id_lower" =~ (^|[_.-])token([_.-]|$) ]]; then
+              printf 'Docker npm secret-id must not include a token segment; use a bundle id such as packagemaze_npm or packagemaze_npm_web.\n' >&2
+              exit 1
+            fi
+            secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-npm.XXXXXXXX")"
+            {
+              printf 'packagemaze_docker_cleanup() {\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_IFS="$IFS"\n'
+              printf '  IFS=:\n'
+              printf '  for packagemaze_docker_config_dir in ${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}; do\n'
+              printf '    [ -n "$packagemaze_docker_config_dir" ] && rm -rf "$packagemaze_docker_config_dir"\n'
+              printf '  done\n'
+              printf '  IFS="$PACKAGEMAZE_DOCKER_CLEANUP_IFS"\n'
+              printf '}\n'
+              printf 'if [ "${PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED:-}" != "1" ]; then\n'
+              printf '  trap packagemaze_docker_cleanup EXIT\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED=1\n'
+              printf 'fi\n'
+              printf 'PACKAGEMAZE_NPM_CONFIG_DIR="$(mktemp -d)"\n'
+              printf 'PACKAGEMAZE_DOCKER_CONFIG_DIRS="${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}:$PACKAGEMAZE_NPM_CONFIG_DIR"\n'
+              printf 'cat > "$PACKAGEMAZE_NPM_CONFIG_DIR/npmrc" <<'\''PACKAGEMAZE_NPMRC'\''\n'
+              printf 'registry=%s/\n' "$feed_url"
+              printf 'replace-registry-host=always\n'
+              printf '//%s/:_authToken=%s\n' "$auth_path" "$PACKAGE_MAZE_TOKEN"
+              printf 'PACKAGEMAZE_NPMRC\n'
+              printf 'export NPM_CONFIG_USERCONFIG="$PACKAGEMAZE_NPM_CONFIG_DIR/npmrc"\n'
+              printf 'export COREPACK_NPM_REGISTRY=%s\n' "$(shell_quote "${feed_url}/")"
+            } > "$secret_file"
+            ;;
+          pypi)
+            secret_id="packagemaze_pypi"
+            if [ -n "$REQUESTED_SECRET_ID" ]; then
+              secret_id="$REQUESTED_SECRET_ID"
+            fi
+            if [[ ! "$secret_id" =~ ^packagemaze[_-]pypi([_.-][a-z0-9]+)*$ ]]; then
+              printf 'Docker PyPI secret-id must be packagemaze_pypi or a lowercase packagemaze_pypi-prefixed id.\n' >&2
+              exit 1
+            fi
+            secret_id_lower="$(printf '%s' "$secret_id" | tr '[:upper:]' '[:lower:]')"
+            if [[ "$secret_id_lower" =~ (^|[_.-])token([_.-]|$) ]]; then
+              printf 'Docker PyPI secret-id must not include a token segment; use a bundle id such as packagemaze_pypi or packagemaze_pypi_api.\n' >&2
+              exit 1
+            fi
+            case "$feed_url" in
+              http://*) feed_scheme="http" ;;
+              https://*) feed_scheme="https" ;;
+            esac
+            secret_file="$(mktemp "${RUNNER_TEMP}/packagemaze-pypi.XXXXXXXX")"
+            {
+              printf 'packagemaze_docker_cleanup() {\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_IFS="$IFS"\n'
+              printf '  IFS=:\n'
+              printf '  for packagemaze_docker_config_dir in ${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}; do\n'
+              printf '    [ -n "$packagemaze_docker_config_dir" ] && rm -rf "$packagemaze_docker_config_dir"\n'
+              printf '  done\n'
+              printf '  IFS="$PACKAGEMAZE_DOCKER_CLEANUP_IFS"\n'
+              printf '}\n'
+              printf 'if [ "${PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED:-}" != "1" ]; then\n'
+              printf '  trap packagemaze_docker_cleanup EXIT\n'
+              printf '  PACKAGEMAZE_DOCKER_CLEANUP_REGISTERED=1\n'
+              printf 'fi\n'
+              printf 'PACKAGEMAZE_PYPI_TOKEN=%s\n' "$(shell_quote "$PACKAGE_MAZE_TOKEN")"
+              printf 'PACKAGEMAZE_PIP_CONFIG_DIR="$(mktemp -d)"\n'
+              printf 'PACKAGEMAZE_DOCKER_CONFIG_DIRS="${PACKAGEMAZE_DOCKER_CONFIG_DIRS:-}:$PACKAGEMAZE_PIP_CONFIG_DIR"\n'
+              printf 'PACKAGEMAZE_PYPI_INDEX_SCHEME=%s\n' "$(shell_quote "$feed_scheme")"
+              printf 'PACKAGEMAZE_PYPI_AUTH_PATH=%s\n' "$(shell_quote "$auth_path")"
+              printf 'printf '\''[global]\\nindex-url = %%s://__token__:%%s@%%s/simple/\\n'\'' "$PACKAGEMAZE_PYPI_INDEX_SCHEME" "$PACKAGEMAZE_PYPI_TOKEN" "$PACKAGEMAZE_PYPI_AUTH_PATH" > "$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
+              printf 'export PIP_CONFIG_FILE="$PACKAGEMAZE_PIP_CONFIG_DIR/pip.conf"\n'
+              printf 'export PIP_INDEX_URL="${PACKAGEMAZE_PYPI_INDEX_SCHEME}://__token__:${PACKAGEMAZE_PYPI_TOKEN}@${PACKAGEMAZE_PYPI_AUTH_PATH}/simple/"\n'
+              printf 'export UV_INDEX_URL="$PIP_INDEX_URL"\n'
+              printf 'unset PACKAGEMAZE_PYPI_TOKEN\n'
+            } > "$secret_file"
+            ;;
+          *)
+            printf 'Unsupported or missing Artifact Protocol for docker-build: %s. Docker bundles need maze CLI v0.0.2+ and an npm or PyPI Feed.\n' "$FEED_PROTOCOL" >&2
+            exit 1
+            ;;
+        esac
+
+        chmod 0600 "$secret_file"
+
+        {
+          printf 'secret_files<<PACKAGEMAZE_SECRET_FILES\n'
+          printf '%s=%s\n' "$secret_id" "$secret_file"
+          printf 'PACKAGEMAZE_SECRET_FILES\n'
+          printf 'secret_args=--secret id=%s,src=%s\n' "$secret_id" "$(shell_quote "$secret_file")"
+          printf 'secret_id=%s\n' "$secret_id"
+          printf 'secret_path=%s\n' "$secret_file"
+        } >> "$GITHUB_OUTPUT"
