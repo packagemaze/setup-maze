@@ -38,6 +38,12 @@ outputs:
   token:
     description: PackageMaze token for non-Docker package-client steps when feed is set.
     value: ${{ steps.token-output.outputs.token }}
+  build_id:
+    description: Server-derived PackageMaze Build id returned by token exchange when supported.
+    value: ${{ steps.exchange.outputs.build_id || steps.docker-secrets.outputs.build_id }}
+  ci_session_id:
+    description: Compatibility alias for build_id returned by token exchange when supported.
+    value: ${{ steps.exchange.outputs.ci_session_id || steps.docker-secrets.outputs.ci_session_id }}
   secret_files:
     description: docker/build-push-action secret-files value for purpose docker-build.
     value: ${{ steps.docker-secrets.outputs.secret_files }}
@@ -206,15 +212,31 @@ runs:
         exchange_file="$(mktemp "${RUNNER_TEMP}/packagemaze-exchange.XXXXXXXX")"
         trap 'rm -f "$exchange_file"' EXIT
         "$MAZE_BINARY" auth exchange-oidc --feed "$FEED" --purpose docker-build --setup-invocation-id "$SETUP_INVOCATION_ID" --format shell > "$exchange_file"
+        unset MAZE_BUILD_ID MAZE_CI_SESSION_ID
         # shellcheck disable=SC1090
         . "$exchange_file"
         rm -f "$exchange_file"
 
+        BUILD_ID="${MAZE_BUILD_ID:-}"
+        CI_SESSION_ID="${MAZE_CI_SESSION_ID:-}"
         PACKAGE_MAZE_TOKEN="${MAZE_TOKEN:-}"
         FEED_BASE_URL="${MAZE_FEED_BASE_URL:-}"
         FEED_PROTOCOL="${MAZE_ARTIFACT_PROTOCOL:-}"
         printf '::add-mask::%s\n' "$PACKAGE_MAZE_TOKEN"
-        unset MAZE_TOKEN MAZE_TOKEN_EXPIRES_AT MAZE_FEED MAZE_FEED_BASE_URL MAZE_PURPOSE MAZE_ARTIFACT_PROTOCOL
+        unset MAZE_BUILD_ID MAZE_CI_SESSION_ID MAZE_TOKEN MAZE_TOKEN_EXPIRES_AT MAZE_FEED MAZE_FEED_BASE_URL MAZE_PURPOSE MAZE_ARTIFACT_PROTOCOL
+
+        if [[ "$BUILD_ID" == *$'\n'* || "$BUILD_ID" == *$'\r'* || "$CI_SESSION_ID" == *$'\n'* || "$CI_SESSION_ID" == *$'\r'* ]]; then
+          printf 'PackageMaze Build identifiers contain an invalid newline.\n' >&2
+          exit 1
+        fi
+        if { [ -n "$BUILD_ID" ] && [ -z "$CI_SESSION_ID" ]; } || { [ -z "$BUILD_ID" ] && [ -n "$CI_SESSION_ID" ]; }; then
+          printf 'maze returned only one PackageMaze Build identifier; build_id and ci_session_id must be returned together.\n' >&2
+          exit 1
+        fi
+        if [ -n "$BUILD_ID" ] && [ "$BUILD_ID" != "$CI_SESSION_ID" ]; then
+          printf 'maze returned contradictory PackageMaze Build identifiers.\n' >&2
+          exit 1
+        fi
 
         if [ -z "$FEED_BASE_URL" ]; then
           printf 'Docker bundles need maze CLI v0.0.2+ so setup-maze can receive the Feed Base URL.\n' >&2
@@ -330,6 +352,10 @@ runs:
         chmod 0600 "$secret_file"
 
         {
+          if [ -n "$BUILD_ID" ]; then
+            printf 'build_id=%s\n' "$BUILD_ID"
+            printf 'ci_session_id=%s\n' "$CI_SESSION_ID"
+          fi
           printf 'secret_files<<PACKAGEMAZE_SECRET_FILES\n'
           printf '%s=%s\n' "$secret_id" "$secret_file"
           printf 'PACKAGEMAZE_SECRET_FILES\n'
