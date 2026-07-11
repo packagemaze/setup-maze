@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+write_shell_exchange() {
+  printf 'export MAZE_TOKEN=%s\n' "'$1'"
+  printf 'export MAZE_TOKEN_EXPIRES_AT=%s\n' "'2026-06-26T00:15:00Z'"
+  printf 'export MAZE_FEED=%s\n' "'$2'"
+  printf 'export MAZE_FEED_BASE_URL=%s\n' "'$3'"
+  printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
+  printf 'export MAZE_ARTIFACT_PROTOCOL=%s\n' "'$4'"
+}
+
+setup_invocation_id=""
+forwarded_args=()
+while (($# > 0)); do
+  case "$1" in
+    --setup-invocation-id)
+      if (($# < 2)); then
+        printf '%s\n' 'missing --setup-invocation-id value' >&2
+        exit 2
+      fi
+      setup_invocation_id="$2"
+      shift 2
+      ;;
+    *)
+      forwarded_args+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${forwarded_args[@]}"
+
+if [ "${1:-}" = "auth" ] && [ "${2:-}" = "exchange-oidc" ] && [ "${3:-}" != "--help" ]; then
+  if [[ ! "$setup_invocation_id" =~ ^setup-maze_[0-9a-f]{32}$ ]]; then
+    printf 'invalid setup-maze invocation id: %s\n' "$setup_invocation_id" >&2
+    exit 2
+  fi
+  printf '%s\t%s\n' "$setup_invocation_id" "$*" >> "${RUNNER_TEMP}/maze-exchange-requests.tsv"
+fi
+
+case "$*" in
+  "version") printf 'maze smoke v0.0.4\n' ;;
+  "auth exchange-oidc --help") printf 'Exchange a CI OIDC identity token\n' ;;
+  "auth exchange-oidc --feed org/feed --purpose install --format github-output")
+    printf '::add-mask::fake-install-token\n'
+    printf 'token=fake-install-token\n' >> "$GITHUB_OUTPUT"
+    printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+    printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
+    ;;
+  "auth exchange-oidc --feed org/feed --purpose docker-build --format shell")
+    write_shell_exchange fake-docker-token org/feed https://pkg.packagemaze.com/org/feed npm
+    ;;
+  "auth exchange-oidc --feed org/admin --purpose docker-build --format shell")
+    write_shell_exchange fake-admin-docker-token org/admin https://pkg.packagemaze.com/org/admin npm
+    ;;
+  "auth exchange-oidc --feed org/pypi --purpose docker-build --format shell")
+    write_shell_exchange fake-pypi-docker-token org/pypi http://pkg.packagemaze.test/org/pypi pypi
+    ;;
+  "auth exchange-oidc --feed org/missing-metadata --purpose docker-build --format shell")
+    write_shell_exchange fake-missing-metadata-token org/missing-metadata "" npm
+    ;;
+  "auth exchange-oidc --feed org/old-cli --purpose docker-build --format shell")
+    printf 'export MAZE_TOKEN=%s\n' "'fake-old-cli-token'"
+    printf 'export MAZE_TOKEN_EXPIRES_AT=%s\n' "'2026-06-26T00:15:00Z'"
+    printf 'export MAZE_FEED=%s\n' "'org/old-cli'"
+    printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
+    ;;
+  "auth exchange-oidc --feed org/unsupported --purpose docker-build --format shell")
+    write_shell_exchange fake-unsupported-token org/unsupported https://pkg.packagemaze.com/org/unsupported maven
+    ;;
+  "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
+    printf '::add-mask::fake-publish-token\n'
+    printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
+    printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
+    printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
+    ;;
+  *) printf 'unexpected args: %s\n' "$*" >&2; exit 2 ;;
+esac
