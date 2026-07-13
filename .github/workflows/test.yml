@@ -39,15 +39,15 @@ jobs:
       - name: Check install-only outputs
         env:
           BINARY: ${{ steps.install_only.outputs.binary }}
-          BUILD_ID: ${{ steps.install_only.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.install_only.outputs.ci_session_id }}
+          BUILD_NUMBER: ${{ steps.install_only.outputs.build_number }}
+          BUILD_URL: ${{ steps.install_only.outputs.build_url }}
           INSTALL_PATH: ${{ steps.install_only.outputs.path }}
           TOKEN: ${{ steps.install_only.outputs.token }}
         run: |
           set -euo pipefail
           test -x "$BINARY"
-          test -z "$BUILD_ID"
-          test -z "$CI_SESSION_ID"
+          test -z "$BUILD_NUMBER"
+          test -z "$BUILD_URL"
           test -d "$INSTALL_PATH"
           test -z "$TOKEN"
           maze auth exchange-oidc --help
@@ -60,13 +60,13 @@ jobs:
 
       - name: Check install token output
         env:
-          BUILD_ID: ${{ steps.install_token.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.install_token.outputs.ci_session_id }}
+          BUILD_NUMBER: ${{ steps.install_token.outputs.build_number }}
+          BUILD_URL: ${{ steps.install_token.outputs.build_url }}
           TOKEN: ${{ steps.install_token.outputs.token }}
         run: |
           set -euo pipefail
-          test "$BUILD_ID" = "cises_setupmaze000000000000000000"
-          test "$CI_SESSION_ID" = "$BUILD_ID"
+          test "$BUILD_NUMBER" = "482"
+          test "$BUILD_URL" = "https://www.packagemaze.com/org/builds/482"
           test "$TOKEN" = "fake-install-token"
 
       - id: publish_token
@@ -79,13 +79,13 @@ jobs:
 
       - name: Check publish token output
         env:
-          BUILD_ID: ${{ steps.publish_token.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.publish_token.outputs.ci_session_id }}
+          BUILD_NUMBER: ${{ steps.publish_token.outputs.build_number }}
+          BUILD_URL: ${{ steps.publish_token.outputs.build_url }}
           TOKEN: ${{ steps.publish_token.outputs.token }}
         run: |
           set -euo pipefail
-          test "$BUILD_ID" = "cises_setupmaze000000000000000000"
-          test "$CI_SESSION_ID" = "$BUILD_ID"
+          test "$BUILD_NUMBER" = "482"
+          test "$BUILD_URL" = "https://www.packagemaze.com/org/builds/482"
           test "$TOKEN" = "fake-publish-token"
 
       - id: legacy_build_install
@@ -96,13 +96,13 @@ jobs:
 
       - name: Check older server omits ordinary Build outputs cleanly
         env:
-          BUILD_ID: ${{ steps.legacy_build_install.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.legacy_build_install.outputs.ci_session_id }}
+          BUILD_NUMBER: ${{ steps.legacy_build_install.outputs.build_number }}
+          BUILD_URL: ${{ steps.legacy_build_install.outputs.build_url }}
           TOKEN: ${{ steps.legacy_build_install.outputs.token }}
         run: |
           set -euo pipefail
-          test -z "$BUILD_ID"
-          test -z "$CI_SESSION_ID"
+          test -z "$BUILD_NUMBER"
+          test -z "$BUILD_URL"
           test "$TOKEN" = "fake-legacy-install-token"
 
       - id: invalid_publish_missing_inputs
@@ -143,8 +143,8 @@ jobs:
 
       - name: Check Docker secret outputs
         env:
-          BUILD_ID: ${{ steps.docker_token.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.docker_token.outputs.ci_session_id }}
+          BUILD_NUMBER: ${{ steps.docker_token.outputs.build_number }}
+          BUILD_URL: ${{ steps.docker_token.outputs.build_url }}
           SECRET_ARGS: ${{ steps.docker_token.outputs.secret_args }}
           SECRET_FILES: ${{ steps.docker_token.outputs.secret_files }}
           SECRET_ID: ${{ steps.docker_token.outputs.secret_id }}
@@ -152,8 +152,8 @@ jobs:
           TOKEN: ${{ steps.docker_token.outputs.token }}
         run: |
           set -euo pipefail
-          test "$BUILD_ID" = "cises_setupmaze000000000000000000"
-          test "$CI_SESSION_ID" = "$BUILD_ID"
+          test "$BUILD_NUMBER" = "482"
+          test "$BUILD_URL" = "https://www.packagemaze.com/org/builds/482"
           test -z "$TOKEN"
           test "$SECRET_ID" = "packagemaze_npm"
           test -n "$SECRET_ARGS"
@@ -161,15 +161,15 @@ jobs:
           test "${SECRET_FILES#packagemaze_npm=}" = "$SECRET_PATH"
           grep -q "fake-docker-token" "$SECRET_PATH"
           grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$SECRET_PATH"
-          ! grep -Fq "$BUILD_ID" "$SECRET_PATH"
-          ! grep -q "MAZE_BUILD_ID" "$SECRET_PATH"
-          ! grep -q "MAZE_CI_SESSION_ID" "$SECRET_PATH"
+          ! grep -Fq "$BUILD_URL" "$SECRET_PATH"
+          ! grep -q "MAZE_BUILD_NUMBER" "$SECRET_PATH"
+          ! grep -q "MAZE_BUILD_URL" "$SECRET_PATH"
           ! grep -q "MAZE_TOKEN" "$SECRET_PATH"
           ! grep -q "COREPACK_NPM_TOKEN" "$SECRET_PATH"
           (
             . "$SECRET_PATH"
-            test -z "${MAZE_BUILD_ID:-}"
-            test -z "${MAZE_CI_SESSION_ID:-}"
+            test -z "${MAZE_BUILD_NUMBER:-}"
+            test -z "${MAZE_BUILD_URL:-}"
             test -z "${MAZE_TOKEN:-}"
             test -f "$NPM_CONFIG_USERCONFIG"
             grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$NPM_CONFIG_USERCONFIG"
@@ -187,58 +187,52 @@ jobs:
 
       - name: Check older server omits Docker Build outputs cleanly
         env:
-          BUILD_ID: ${{ steps.legacy_build_docker.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.legacy_build_docker.outputs.ci_session_id }}
+          BUILD_NUMBER: ${{ steps.legacy_build_docker.outputs.build_number }}
+          BUILD_URL: ${{ steps.legacy_build_docker.outputs.build_url }}
           SECRET_PATH: ${{ steps.legacy_build_docker.outputs.secret_path }}
         run: |
           set -euo pipefail
-          test -z "$BUILD_ID"
-          test -z "$CI_SESSION_ID"
+          test -z "$BUILD_NUMBER"
+          test -z "$BUILD_URL"
           test -f "$SECRET_PATH"
-          ! grep -q "MAZE_BUILD_ID" "$SECRET_PATH"
-          ! grep -q "MAZE_CI_SESSION_ID" "$SECRET_PATH"
+          ! grep -q "MAZE_BUILD_NUMBER" "$SECRET_PATH"
+          ! grep -q "MAZE_BUILD_URL" "$SECRET_PATH"
 
-      - id: invalid_docker_mismatched_build
+      - id: server_build_values
         uses: ./
-        continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
           feed: org/mismatched-build
           purpose: docker-build
 
-      - name: Check Docker exchange rejects contradictory Build outputs
+      - name: Check Docker exchange trusts server Build outputs
         env:
-          BUILD_ID: ${{ steps.invalid_docker_mismatched_build.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.invalid_docker_mismatched_build.outputs.ci_session_id }}
-          OUTCOME: ${{ steps.invalid_docker_mismatched_build.outcome }}
-          SECRET_PATH: ${{ steps.invalid_docker_mismatched_build.outputs.secret_path }}
+          BUILD_NUMBER: ${{ steps.server_build_values.outputs.build_number }}
+          BUILD_URL: ${{ steps.server_build_values.outputs.build_url }}
+          SECRET_PATH: ${{ steps.server_build_values.outputs.secret_path }}
         run: |
           set -euo pipefail
-          test "$OUTCOME" = "failure"
-          test -z "$BUILD_ID"
-          test -z "$CI_SESSION_ID"
-          test -z "$SECRET_PATH"
+          test "$BUILD_NUMBER" = "not-a-number"
+          test "$BUILD_URL" = "https://www.packagemaze.com/org/builds/482"
+          test -f "$SECRET_PATH"
 
-      - id: invalid_docker_incomplete_build
+      - id: server_partial_build_values
         uses: ./
-        continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
           feed: org/incomplete-build
           purpose: docker-build
 
-      - name: Check Docker exchange rejects incomplete Build outputs
+      - name: Check Docker exchange passes through partial server Build outputs
         env:
-          BUILD_ID: ${{ steps.invalid_docker_incomplete_build.outputs.build_id }}
-          CI_SESSION_ID: ${{ steps.invalid_docker_incomplete_build.outputs.ci_session_id }}
-          OUTCOME: ${{ steps.invalid_docker_incomplete_build.outcome }}
-          SECRET_PATH: ${{ steps.invalid_docker_incomplete_build.outputs.secret_path }}
+          BUILD_NUMBER: ${{ steps.server_partial_build_values.outputs.build_number }}
+          BUILD_URL: ${{ steps.server_partial_build_values.outputs.build_url }}
+          SECRET_PATH: ${{ steps.server_partial_build_values.outputs.secret_path }}
         run: |
           set -euo pipefail
-          test "$OUTCOME" = "failure"
-          test -z "$BUILD_ID"
-          test -z "$CI_SESSION_ID"
-          test -z "$SECRET_PATH"
+          test "$BUILD_NUMBER" = "482"
+          test -z "$BUILD_URL"
+          test -f "$SECRET_PATH"
 
       - id: invalid_docker_token_secret_id
         uses: ./

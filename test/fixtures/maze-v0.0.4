@@ -9,19 +9,20 @@ write_shell_exchange() {
   printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
   printf 'export MAZE_ARTIFACT_PROTOCOL=%s\n' "'$4'"
   if [ -n "${5:-}" ]; then
-    printf 'export MAZE_BUILD_ID=%s\n' "'$5'"
+    printf 'export MAZE_BUILD_NUMBER=%s\n' "'$5'"
   fi
   if [ -n "${6:-}" ]; then
-    printf 'export MAZE_CI_SESSION_ID=%s\n' "'$6'"
+    printf 'export MAZE_BUILD_URL=%s\n' "'$6'"
   fi
 }
 
-write_github_build_ids() {
-  printf 'build_id=%s\n' "$fixture_build_id" >> "$GITHUB_OUTPUT"
-  printf 'ci_session_id=%s\n' "$fixture_build_id" >> "$GITHUB_OUTPUT"
+write_github_build_reference() {
+  printf 'build_number=%s\n' "$fixture_build_number" >> "$GITHUB_OUTPUT"
+  printf 'build_url=%s\n' "$fixture_build_url" >> "$GITHUB_OUTPUT"
 }
 
-fixture_build_id="cises_setupmaze000000000000000000"
+fixture_build_number="482"
+fixture_build_url="https://www.packagemaze.com/org/builds/482"
 
 setup_invocation_id=""
 forwarded_args=()
@@ -59,19 +60,19 @@ case "$*" in
     printf 'token=fake-install-token\n' >> "$GITHUB_OUTPUT"
     printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
     printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
-    write_github_build_ids
+    write_github_build_reference
     ;;
   "auth exchange-oidc --feed org/feed --purpose docker-build --format shell")
-    write_shell_exchange fake-docker-token org/feed https://pkg.packagemaze.com/org/feed npm "$fixture_build_id" "$fixture_build_id"
+    write_shell_exchange fake-docker-token org/feed https://pkg.packagemaze.com/org/feed npm "$fixture_build_number" "$fixture_build_url"
     ;;
   "auth exchange-oidc --feed org/admin --purpose docker-build --format shell")
-    write_shell_exchange fake-admin-docker-token org/admin https://pkg.packagemaze.com/org/admin npm "$fixture_build_id" "$fixture_build_id"
+    write_shell_exchange fake-admin-docker-token org/admin https://pkg.packagemaze.com/org/admin npm "$fixture_build_number" "$fixture_build_url"
     ;;
   "auth exchange-oidc --feed org/pypi --purpose docker-build --format shell")
-    write_shell_exchange fake-pypi-docker-token org/pypi http://pkg.packagemaze.test/org/pypi pypi "$fixture_build_id" "$fixture_build_id"
+    write_shell_exchange fake-pypi-docker-token org/pypi http://pkg.packagemaze.test/org/pypi pypi "$fixture_build_number" "$fixture_build_url"
     ;;
   "auth exchange-oidc --feed org/missing-metadata --purpose docker-build --format shell")
-    write_shell_exchange fake-missing-metadata-token org/missing-metadata "" npm "$fixture_build_id" "$fixture_build_id"
+    write_shell_exchange fake-missing-metadata-token org/missing-metadata "" npm "$fixture_build_number" "$fixture_build_url"
     ;;
   "auth exchange-oidc --feed org/old-cli --purpose docker-build --format shell")
     printf 'export MAZE_TOKEN=%s\n' "'fake-old-cli-token'"
@@ -80,7 +81,7 @@ case "$*" in
     printf 'export MAZE_PURPOSE=%s\n' "'docker-build'"
     ;;
   "auth exchange-oidc --feed org/unsupported --purpose docker-build --format shell")
-    write_shell_exchange fake-unsupported-token org/unsupported https://pkg.packagemaze.com/org/unsupported maven "$fixture_build_id" "$fixture_build_id"
+    write_shell_exchange fake-unsupported-token org/unsupported https://pkg.packagemaze.com/org/unsupported maven "$fixture_build_number" "$fixture_build_url"
     ;;
   "auth exchange-oidc --feed org/legacy-build --purpose install --format github-output")
     printf '::add-mask::fake-legacy-install-token\n'
@@ -92,17 +93,17 @@ case "$*" in
     write_shell_exchange fake-legacy-docker-token org/legacy-build https://pkg.packagemaze.com/org/legacy-build npm "" ""
     ;;
   "auth exchange-oidc --feed org/mismatched-build --purpose docker-build --format shell")
-    write_shell_exchange fake-mismatched-docker-token org/mismatched-build https://pkg.packagemaze.com/org/mismatched-build npm cises_build_one cises_build_two
+    write_shell_exchange fake-mismatched-docker-token org/mismatched-build https://pkg.packagemaze.com/org/mismatched-build npm not-a-number "$fixture_build_url"
     ;;
   "auth exchange-oidc --feed org/incomplete-build --purpose docker-build --format shell")
-    write_shell_exchange fake-incomplete-docker-token org/incomplete-build https://pkg.packagemaze.com/org/incomplete-build npm "$fixture_build_id" ""
+    write_shell_exchange fake-incomplete-docker-token org/incomplete-build https://pkg.packagemaze.com/org/incomplete-build npm "$fixture_build_number" ""
     ;;
   "auth exchange-oidc --feed org/feed --purpose publish --format github-output --package @scope/package")
     printf '::add-mask::fake-publish-token\n'
     printf 'token=fake-publish-token\n' >> "$GITHUB_OUTPUT"
     printf 'artifact_protocol=npm\n' >> "$GITHUB_OUTPUT"
     printf 'feed_base_url=https://pkg.packagemaze.com/org/feed\n' >> "$GITHUB_OUTPUT"
-    write_github_build_ids
+    write_github_build_reference
     ;;
   *) printf 'unexpected args: %s\n' "$*" >&2; exit 2 ;;
 esac
