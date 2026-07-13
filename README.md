@@ -37,14 +37,12 @@ steps:
       NODE_AUTH_TOKEN: ${{ steps.maze.outputs.token }}
 ```
 
-Successful exchanges also expose the server-derived `build_id`. A human can
-open that Build report at
-`https://app.packagemaze.com/<organization>/sessions/<build_id>`, and an Agent
-can carry the same exact handle into PackageMaze activity and diagnosis work.
-The current MCP compatibility input is named `ci_session_id`, so setup-maze
-also exposes an identical output with that name. Prefer `build_id` everywhere
-else, and never derive either value from `setup_invocation_id`. Both outputs
-are empty when the action reaches an older PackageMaze server during rollout.
+Successful exchanges also expose the Organization-scoped `build_number` and
+canonical server-derived `build_url`. Logs can name `Build #<number>`, and a
+human or Agent can follow the URL directly without constructing a route from an
+internal identifier. Never derive either value from `setup_invocation_id`.
+Both outputs are empty when the action reaches an older PackageMaze server
+during rollout.
 
 Docker image builds use the same one-token-per-step model, but setup-maze
 packages the token as a BuildKit secret bundle instead of exposing a plain token
@@ -214,8 +212,8 @@ repository configuration.
 | `binary`        | Installed maze binary path.                                                                                                     |
 | `path`          | Directory added to `PATH`.                                                                                                      |
 | `token`         | PackageMaze token for non-Docker package-client steps when `feed` is set. The CLI writes the GitHub output and masks the token. |
-| `build_id`      | Server-derived PackageMaze Build id returned by token exchange when supported.                                                  |
-| `ci_session_id` | Compatibility alias identical to `build_id`; prefer `build_id` for new integrations.                                            |
+| `build_number`  | Organization-scoped PackageMaze Build number returned by token exchange when supported.                                        |
+| `build_url`     | Canonical PackageMaze Build report URL returned by token exchange when supported.                                              |
 | `secret_files`  | `docker/build-push-action` `secret-files` value for `purpose: docker-build`.                                                    |
 | `secret_args`   | `docker buildx build --secret` arguments for `purpose: docker-build`.                                                           |
 | `secret_id`     | BuildKit secret id to mount in Dockerfile for `purpose: docker-build`.                                                          |
