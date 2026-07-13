@@ -193,6 +193,16 @@ runs:
         set -euo pipefail
         printf 'token=%s\n' "$PACKAGE_MAZE_TOKEN" >> "$GITHUB_OUTPUT"
 
+    - name: Show PackageMaze Build
+      if: ${{ inputs.feed != '' && inputs.purpose != 'docker-build' && steps.exchange.outputs.build_number != '' }}
+      shell: bash
+      env:
+        BUILD_NUMBER: ${{ steps.exchange.outputs.build_number }}
+        BUILD_URL: ${{ steps.exchange.outputs.build_url }}
+      run: |
+        set -euo pipefail
+        printf 'PackageMaze Build #%s: %s\n' "$BUILD_NUMBER" "$BUILD_URL"
+
     - id: docker-secrets
       if: ${{ inputs.feed != '' && inputs.purpose == 'docker-build' }}
       shell: bash
@@ -245,6 +255,7 @@ runs:
               exit 1
               ;;
           esac
+          printf 'PackageMaze Build #%s: %s\n' "$BUILD_NUMBER" "$BUILD_URL"
         fi
 
         if [ -z "$FEED_BASE_URL" ]; then
