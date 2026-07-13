@@ -235,26 +235,7 @@ runs:
         printf '::add-mask::%s\n' "$PACKAGE_MAZE_TOKEN"
         unset MAZE_BUILD_NUMBER MAZE_BUILD_URL MAZE_TOKEN MAZE_TOKEN_EXPIRES_AT MAZE_FEED MAZE_FEED_BASE_URL MAZE_PURPOSE MAZE_ARTIFACT_PROTOCOL
 
-        if [[ "$BUILD_NUMBER" == *$'\n'* || "$BUILD_NUMBER" == *$'\r'* || "$BUILD_URL" == *$'\n'* || "$BUILD_URL" == *$'\r'* ]]; then
-          printf 'PackageMaze Build reference contains an invalid newline.\n' >&2
-          exit 1
-        fi
-        if { [ -n "$BUILD_NUMBER" ] && [ -z "$BUILD_URL" ]; } || { [ -z "$BUILD_NUMBER" ] && [ -n "$BUILD_URL" ]; }; then
-          printf 'maze returned an incomplete PackageMaze Build reference; build_number and build_url must be returned together.\n' >&2
-          exit 1
-        fi
-        if [ -n "$BUILD_NUMBER" ] && [[ ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-          printf 'PackageMaze Build number must be a positive integer.\n' >&2
-          exit 1
-        fi
         if [ -n "$BUILD_URL" ]; then
-          case "$BUILD_URL" in
-            http://* | https://*) ;;
-            *)
-              printf 'PackageMaze Build URL must start with http:// or https://.\n' >&2
-              exit 1
-              ;;
-          esac
           printf 'PackageMaze Build #%s: %s\n' "$BUILD_NUMBER" "$BUILD_URL"
         fi
 
@@ -374,6 +355,8 @@ runs:
         {
           if [ -n "$BUILD_NUMBER" ]; then
             printf 'build_number=%s\n' "$BUILD_NUMBER"
+          fi
+          if [ -n "$BUILD_URL" ]; then
             printf 'build_url=%s\n' "$BUILD_URL"
           fi
           printf 'secret_files<<PACKAGEMAZE_SECRET_FILES\n'
