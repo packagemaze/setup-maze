@@ -19,7 +19,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p fake-release fake-bin
-          cp test/fixtures/maze-v0.0.4 fake-bin/maze
+          cp test/fixtures/maze-v0.0.6 fake-bin/maze
           chmod +x fake-bin/maze
           tar -C fake-bin -czf fake-release/maze_linux_amd64.tar.gz maze
           (cd fake-release && shasum -a 256 maze_linux_amd64.tar.gz > maze_checksums.txt)
@@ -495,7 +495,7 @@ jobs:
         run: |
           ruby -ryaml -e '
             action = YAML.safe_load(File.read("action.yml"))
-            abort "unexpected default maze version" unless action.dig("inputs", "version", "default") == "v0.0.4"
+            abort "unexpected default maze version" unless action.dig("inputs", "version", "default") == "v0.0.6"
           '
 
       - id: invalid_package
