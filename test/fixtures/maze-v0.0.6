@@ -53,7 +53,7 @@ if [ "${1:-}" = "auth" ] && [ "${2:-}" = "exchange-oidc" ] && [ "${3:-}" != "--h
 fi
 
 case "$*" in
-  "version") printf 'maze smoke v0.0.4\n' ;;
+  "version") printf 'maze smoke v0.0.6\n' ;;
   "auth exchange-oidc --help") printf 'Exchange a CI OIDC identity token\n' ;;
   "auth exchange-oidc --feed org/feed --purpose install --format github-output")
     printf '::add-mask::fake-install-token\n'
