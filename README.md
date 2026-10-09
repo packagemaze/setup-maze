@@ -233,8 +233,9 @@ Use `secret_args` directly in the `run:` command, for example
 copy it into an environment variable first; shell quoting inside a variable is
 not re-parsed.
 
-Published CLI binaries currently cover Linux x64, Linux ARM64, and macOS ARM64.
-Windows is not supported yet.
+setup-maze installs the Linux x64, Linux ARM64, and macOS ARM64 builds. maze-cli
+also publishes a Windows x64 build (`maze_windows_amd64.zip`), but setup-maze
+does not install it on Windows runners yet.
 
 Every token exchange carries one opaque `setup-maze_<random128>` setup
 invocation id generated for that action invocation. PackageMaze can use this
