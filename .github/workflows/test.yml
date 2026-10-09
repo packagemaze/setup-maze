@@ -10,26 +10,62 @@ permissions:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v7.0.0
+
+      - id: release_install
+        uses: ./
+
+      - name: Check the pinned release installs
+        env:
+          BINARY: ${{ steps.release_install.outputs.binary }}
+        run: |
+          set -euo pipefail
+          "$BINARY" version
+          maze version
+
+      - name: Check the pinned release installs for PowerShell steps
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          BINARY: ${{ steps.release_install.outputs.binary }}
+        run: |
+          & $env:BINARY version
+          maze version
 
       - name: Create fake release assets
         run: |
           set -euo pipefail
           mkdir -p fake-release fake-bin
-          cp test/fixtures/maze-v0.0.8 fake-bin/maze
-          chmod +x fake-bin/maze
-          tar -C fake-bin -czf fake-release/maze_linux_amd64.tar.gz maze
-          (cd fake-release && shasum -a 256 maze_linux_amd64.tar.gz > maze_checksums.txt)
+          case "${RUNNER_OS}/${RUNNER_ARCH}" in
+            Linux/X64) archive="maze_linux_amd64.tar.gz"; binary="maze"; tar="tar" ;;
+            macOS/ARM64) archive="maze_darwin_arm64.tar.gz"; binary="maze"; tar="tar" ;;
+            Windows/X64) archive="maze_windows_amd64.zip"; binary="maze.exe"; tar="${SYSTEMROOT}/System32/tar.exe" ;;
+          esac
+          cp test/fixtures/maze-v0.0.8 "fake-bin/${binary}"
+          chmod +x "fake-bin/${binary}"
+          (cd fake-bin && "$tar" -acf "../fake-release/${archive}" "$binary")
+          if command -v shasum > /dev/null; then
+            (cd fake-release && shasum -a 256 "$archive" > maze_checksums.txt)
+          else
+            (cd fake-release && sha256sum --text "$archive" > maze_checksums.txt)
+          fi
 
       - name: Serve fake release assets
         run: |
           set -euo pipefail
-          python3 -m http.server 8765 --directory fake-release &
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory fake-release &
           printf '%s\n' "$!" > fake-release-server.pid
-          sleep 1
+          curl -fsS -o /dev/null --retry 30 --retry-connrefused --retry-delay 1 --connect-timeout 2 http://127.0.0.1:8765/maze_checksums.txt
 
       - id: install_only
         uses: ./
@@ -352,6 +388,7 @@ jobs:
           test -z "$SECRET_PATH"
 
       - name: Create npm Docker smoke file
+        if: runner.os == 'Linux'
         run: |
           cat > Dockerfile.packagemaze-npm-smoke <<'DOCKERFILE'
           # syntax=docker/dockerfile:1.7
@@ -367,6 +404,7 @@ jobs:
           DOCKERFILE
 
       - name: Build npm Docker smoke with secret-files
+        if: runner.os == 'Linux'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -433,6 +471,7 @@ jobs:
           )
 
       - name: Create PyPI Docker smoke file
+        if: runner.os == 'Linux'
         run: |
           cat > Dockerfile.packagemaze-pypi-smoke <<'DOCKERFILE'
           # syntax=docker/dockerfile:1.7
@@ -448,9 +487,11 @@ jobs:
           DOCKERFILE
 
       - name: Build PyPI Docker smoke with secret_args
+        if: runner.os == 'Linux'
         run: docker buildx build ${{ steps.docker_pypi_token.outputs.secret_args }} -f Dockerfile.packagemaze-pypi-smoke .
 
       - name: Create multi-feed Docker smoke file
+        if: runner.os == 'Linux'
         run: |
           cat > Dockerfile.packagemaze-multi-smoke <<'DOCKERFILE'
           # syntax=docker/dockerfile:1.7
@@ -468,6 +509,7 @@ jobs:
           DOCKERFILE
 
       - name: Build multi-feed Docker smoke with secret-files
+        if: runner.os == 'Linux'
         uses: docker/build-push-action@v7
         with:
           context: .

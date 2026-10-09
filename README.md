@@ -233,9 +233,9 @@ Use `secret_args` directly in the `run:` command, for example
 copy it into an environment variable first; shell quoting inside a variable is
 not re-parsed.
 
-setup-maze installs the Linux x64, Linux ARM64, and macOS ARM64 builds. maze-cli
-also publishes a Windows x64 build (`maze_windows_amd64.zip`), but setup-maze
-does not install it on Windows runners yet.
+setup-maze installs the Linux x64, Linux ARM64, macOS ARM64, and Windows x64
+builds. On Windows runners the installed binary is `maze.exe`; `maze` on `PATH`
+resolves to it from both PowerShell and bash steps.
 
 Every token exchange carries one opaque `setup-maze_<random128>` setup
 invocation id generated for that action invocation. PackageMaze can use this

@@ -74,6 +74,7 @@ runs:
           Linux/X64) platform="linux_amd64" ;;
           Linux/ARM64) platform="linux_arm64" ;;
           macOS/ARM64) platform="darwin_arm64" ;;
+          Windows/X64) platform="windows_amd64" ;;
           *)
             printf 'PackageMaze does not publish a maze binary for %s/%s yet.\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2
             exit 1
@@ -93,22 +94,35 @@ runs:
           install_dir="${RUNNER_TEMP}/setup-maze/bin"
         fi
 
+        archive="maze_${platform}.tar.gz"
+        binary="maze"
+        tar="tar"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          archive="maze_${platform}.zip"
+          binary="maze.exe"
+          tar="${SYSTEMROOT}/System32/tar.exe"
+          install_dir="$(cygpath -m "$install_dir")"
+        fi
+
         tmp_dir="$(mktemp -d)"
         trap 'rm -rf "$tmp_dir"' EXIT
 
-        archive="maze_${platform}.tar.gz"
         curl -fsSLo "${tmp_dir}/${archive}" "${release_url}/${archive}"
         curl -fsSLo "${tmp_dir}/maze_checksums.txt" "${release_url}/maze_checksums.txt"
         grep "  ${archive}$" "${tmp_dir}/maze_checksums.txt" > "${tmp_dir}/${archive}.sha256"
-        (cd "$tmp_dir" && shasum -a 256 -c "${archive}.sha256")
+        if command -v shasum > /dev/null; then
+          (cd "$tmp_dir" && shasum -a 256 -c "${archive}.sha256")
+        else
+          (cd "$tmp_dir" && sha256sum -c "${archive}.sha256")
+        fi
 
-        tar -xzf "${tmp_dir}/${archive}" -C "$tmp_dir" maze
+        "$tar" -xf "${tmp_dir}/${archive}" -C "$tmp_dir" "$binary"
         mkdir -p "$install_dir"
-        install -m 0755 "${tmp_dir}/maze" "${install_dir}/maze"
-        "${install_dir}/maze" version
+        install -m 0755 "${tmp_dir}/${binary}" "${install_dir}/${binary}"
+        "${install_dir}/${binary}" version
 
         printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
-        printf 'binary=%s/maze\n' "$install_dir" >> "$GITHUB_OUTPUT"
+        printf 'binary=%s/%s\n' "$install_dir" "$binary" >> "$GITHUB_OUTPUT"
         printf 'path=%s\n' "$install_dir" >> "$GITHUB_OUTPUT"
 
     - id: validate-token-inputs
