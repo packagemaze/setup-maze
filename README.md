@@ -1,7 +1,16 @@
 # setup-maze
 
+[PackageMaze](https://www.packagemaze.com/) hosts private npm and PyPI Feeds
+for an Organization. A Feed is one registry URL under pkg.packagemaze.com that
+people, CI, and coding agents install through, and every delivered version is
+on record.
+
 GitHub Action that installs the PackageMaze `maze` CLI from
 [`packagemaze/maze-cli`](https://github.com/packagemaze/maze-cli) releases.
+Coding agents start with the
+[Agent quickstart](https://www.packagemaze.com/docs/agent-quickstart/);
+[Connect your agent](https://www.packagemaze.com/docs/connect-your-agent/)
+covers the MCP endpoint, `https://api.packagemaze.com/mcp`.
 
 By default, setup-maze only installs the CLI and adds it to `PATH`.
 
