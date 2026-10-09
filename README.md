@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 steps:
-  - uses: packagemaze/setup-maze@v0.0.4
+  - uses: packagemaze/setup-maze@v0.0.5
   - run: maze version
 ```
 
@@ -36,7 +36,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.4
+    uses: packagemaze/setup-maze@v0.0.5
     with:
       feed: <organization>/<feed>
       purpose: install
@@ -72,7 +72,7 @@ steps:
   - uses: actions/checkout@v6
 
   - id: maze-docker
-    uses: packagemaze/setup-maze@v0.0.4
+    uses: packagemaze/setup-maze@v0.0.5
     with:
       feed: <organization>/<feed>
       purpose: docker-build
@@ -124,12 +124,12 @@ per Feed and list each `secret_files` output directly under the same
 
 ```yaml
 - id: maze-npm-docker
-  uses: packagemaze/setup-maze@v0.0.4
+  uses: packagemaze/setup-maze@v0.0.5
   with:
     feed: <organization>/<npm-feed>
     purpose: docker-build
 - id: maze-pypi-docker
-  uses: packagemaze/setup-maze@v0.0.4
+  uses: packagemaze/setup-maze@v0.0.5
   with:
     feed: <organization>/<pypi-feed>
     purpose: docker-build
@@ -167,7 +167,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.4
+    uses: packagemaze/setup-maze@v0.0.5
     with:
       feed: <organization>/<feed>
       purpose: publish
@@ -188,7 +188,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.4
+    uses: packagemaze/setup-maze@v0.0.5
     with:
       feed: <organization>/<feed>
 
