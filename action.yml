@@ -14,6 +14,9 @@ inputs:
   release-base-url:
     description: Override release asset base URL for tests and mirrors.
     required: false
+  archive-sha256:
+    description: Trusted SHA256 of the selected platform archive. Overrides the built-in release pin; obtain it independently of the download URL.
+    required: false
   feed:
     description: PackageMaze Feed in org/feed form. When omitted, setup-maze only installs maze.
     required: false
@@ -63,6 +66,7 @@ runs:
     - id: install
       shell: bash
       env:
+        ARCHIVE_SHA256: ${{ inputs.archive-sha256 }}
         REQUESTED_INSTALL_DIR: ${{ inputs.install-dir }}
         RELEASE_BASE_URL: ${{ inputs.release-base-url }}
         REPOSITORY: ${{ inputs.repository }}
@@ -104,12 +108,31 @@ runs:
           install_dir="$(cygpath -m "$install_dir")"
         fi
 
+        expected_sha256="${ARCHIVE_SHA256:-}"
+        if [ -n "$expected_sha256" ] && [[ ! "$expected_sha256" =~ ^[[:xdigit:]]{64}$ ]]; then
+          printf 'archive-sha256 must contain exactly 64 hexadecimal characters.\n' >&2
+          exit 1
+        fi
+        if [ -z "$expected_sha256" ]; then
+          # Reviewed release-asset pins; a mirror override must not disable them.
+          case "${REPOSITORY}/${VERSION}/${platform}" in
+            packagemaze/maze-cli/v0.0.8/linux_amd64) expected_sha256="adc3bd6da1e278c00a5e8f838935315be8c367e0c24c955264b2f57fa4508910" ;;
+            packagemaze/maze-cli/v0.0.8/linux_arm64) expected_sha256="5decb4ea4416c7895e6774b275f9aacba84fef7606d1f223ea53d2d3ec4f138d" ;;
+            packagemaze/maze-cli/v0.0.8/darwin_arm64) expected_sha256="735bdf48195395966f25cf3c5369ec7841f3289ffcbf8ea500b6c4848875bedb" ;;
+            packagemaze/maze-cli/v0.0.8/windows_amd64) expected_sha256="98a03d471d86de246e32ef8b37fee7a1d3cceea201edf560e1a2aedc49e00f56" ;;
+          esac
+        fi
+
         tmp_dir="$(mktemp -d)"
         trap 'rm -rf "$tmp_dir"' EXIT
 
         curl -fsSLo "${tmp_dir}/${archive}" "${release_url}/${archive}"
-        curl -fsSLo "${tmp_dir}/maze_checksums.txt" "${release_url}/maze_checksums.txt"
-        grep "  ${archive}$" "${tmp_dir}/maze_checksums.txt" > "${tmp_dir}/${archive}.sha256"
+        if [ -n "$expected_sha256" ]; then
+          printf '%s  %s\n' "$expected_sha256" "$archive" > "${tmp_dir}/${archive}.sha256"
+        else
+          curl -fsSLo "${tmp_dir}/maze_checksums.txt" "${release_url}/maze_checksums.txt"
+          grep "  ${archive}$" "${tmp_dir}/maze_checksums.txt" > "${tmp_dir}/${archive}.sha256"
+        fi
         if command -v shasum > /dev/null; then
           (cd "$tmp_dir" && shasum -a 256 -c "${archive}.sha256")
         else
