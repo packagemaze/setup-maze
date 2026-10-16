@@ -210,6 +210,7 @@ repository configuration.
 | `repository`       | `packagemaze/maze-cli`    | GitHub repository that publishes maze CLI release assets.                                                                                                                                            |
 | `install-dir`      | runner temp directory     | Directory where the maze binary is installed.                                                                                                                                                        |
 | `release-base-url` | release URL for `version` | Override release asset base URL for tests and mirrors.                                                                                                                                               |
+| `archive-sha256` | built-in pin when available | Trusted SHA256 for the selected platform archive, obtained independently of the download URL. Overrides the built-in pin. |
 | `feed`             | unset                     | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                                                                                                                  |
 | `purpose`          | `install`                 | Token purpose passed to `maze auth exchange-oidc`.                                                                                                                                                   |
 | `package`          | unset                     | Package name for publish tokens. Required with `purpose: publish`.                                                                                                                                   |
@@ -243,3 +244,37 @@ invocation id generated for that action invocation. PackageMaze can use this
 caller-provided correlation value to connect the exchange and Token created by
 the same setup call. The id contains no user intent and is not provider-signed
 Build OIDC Evidence.
+
+## CLI download integrity
+
+The default official CLI release, `packagemaze/maze-cli@v0.0.8`, is checked
+against platform-specific SHA256 digests committed in this action before any
+archive is extracted or binary is installed or executed. This adds no tooling,
+GitHub token, or workflow permissions. A `release-base-url` mirror serving the
+same official archive uses the same pin.
+
+This addresses substitution of both a CLI archive and its checksum file at the
+download source. The trust anchor is the reviewed action source. It does not
+protect against a compromised action reference or an already malicious release
+when its digest is accepted. Pin the action itself to a reviewed commit when
+your workflow requires an immutable action reference.
+
+For custom builds or another release, optionally provide `archive-sha256` with
+the trusted 64-character hex digest for that runner's archive. Obtain it from
+your reviewed release process; fetching it from the same mirror during the job
+does not add authenticity. A supplied digest intentionally overrides the
+built-in pin. For a runner matrix, select the digest matching each archive.
+
+Other versions (including `latest`) and repositories without a supplied digest
+keep the existing downloaded `maze_checksums.txt` check. That detects corruption
+but cannot prevent a download source from replacing both files. Existing custom
+release workflows remain usable; no attestation CLI is required.
+
+When updating the default version, update every supported platform pin in the
+same PR. The current values were captured from the immutable
+[v0.0.8 release asset metadata](https://api.github.com/repos/packagemaze/maze-cli/releases/tags/v0.0.8)
+(release commit `b5b5308a34f2a9e73f5a85cc248d0deafca098c3`). Review the
+release, commit and asset digests through trusted tooling before accepting new
+pins; validate build attestations against the PackageMaze release workflow when
+available. Do not automatically learn a new pin from a failed download. Run
+`bash test/install-integrity.sh` and the existing platform smoke matrix.
