@@ -4,7 +4,7 @@ description: Install the PackageMaze maze CLI
 inputs:
   version:
     description: PackageMaze CLI release tag to install.
-    default: v0.0.10
+    default: v0.0.11
   repository:
     description: GitHub repository that publishes maze CLI release assets.
     default: packagemaze/maze-cli
@@ -22,7 +22,7 @@ inputs:
     required: false
     default: install
   package:
-    description: Package name for publish tokens. Required with purpose publish.
+    description: No longer needed. A publish token is for its Feed and publishes any package there; a name given here is passed on and ignored.
     required: false
   secret-id:
     description: Optional BuildKit secret id for purpose docker-build. Use a lowercase protocol-matched packagemaze_npm_* or packagemaze_pypi_* bundle id only when one Docker build needs multiple same-protocol PackageMaze Feeds. Do not include a token segment.
@@ -143,11 +143,6 @@ runs:
 
         if [ "$PURPOSE" = "publish" ] && [ -z "$FEED" ]; then
           printf 'The publish purpose requires feed so setup-maze can request a publish token.\n' >&2
-          exit 1
-        fi
-
-        if [ "$PURPOSE" = "publish" ] && [ -z "$PACKAGE_NAME" ]; then
-          printf 'The publish purpose requires package so PackageMaze can scope the publish token.\n' >&2
           exit 1
         fi
 
