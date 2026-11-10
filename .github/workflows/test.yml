@@ -51,7 +51,7 @@ jobs:
             macOS/ARM64) archive="maze_darwin_arm64.tar.gz"; binary="maze"; tar="tar" ;;
             Windows/X64) archive="maze_windows_amd64.zip"; binary="maze.exe"; tar="${SYSTEMROOT}/System32/tar.exe" ;;
           esac
-          cp test/fixtures/maze-v0.0.10 "fake-bin/${binary}"
+          cp test/fixtures/maze-v0.0.11 "fake-bin/${binary}"
           chmod +x "fake-bin/${binary}"
           (cd fake-bin && "$tar" -acf "../fake-release/${archive}" "$binary")
           if command -v shasum > /dev/null; then
@@ -111,7 +111,6 @@ jobs:
           release-base-url: http://127.0.0.1:8765
           feed: org/feed
           purpose: publish
-          package: "@scope/package"
 
       - name: Check publish token output
         env:
@@ -148,27 +147,27 @@ jobs:
           release-base-url: http://127.0.0.1:8765
           purpose: publish
 
-      - name: Check publish validation requires feed and package
+      - name: Check publish validation requires feed
         env:
           OUTCOME: ${{ steps.invalid_publish_missing_inputs.outcome }}
         run: |
           set -euo pipefail
           test "$OUTCOME" = "failure"
 
-      - id: invalid_publish_missing_package
+      - id: publish_token_with_package
         uses: ./
-        continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
           feed: org/feed
           purpose: publish
+          package: "@scope/package"
 
-      - name: Check publish validation requires package
+      - name: Check an older workflow that names a package still gets a publish token
         env:
-          OUTCOME: ${{ steps.invalid_publish_missing_package.outcome }}
+          TOKEN: ${{ steps.publish_token_with_package.outputs.token }}
         run: |
           set -euo pipefail
-          test "$OUTCOME" = "failure"
+          test "$TOKEN" = "fake-publish-token"
 
       - id: docker_token
         uses: ./
@@ -528,16 +527,16 @@ jobs:
           set -euo pipefail
           request_log="${RUNNER_TEMP}/maze-exchange-requests.tsv"
           test -f "$request_log"
-          test "$(wc -l < "$request_log" | tr -d '[:space:]')" = "15"
+          test "$(wc -l < "$request_log" | tr -d '[:space:]')" = "16"
           cut -f1 "$request_log" | grep -Eq '^setup-maze_[0-9a-f]{32}$'
-          test "$(cut -f1 "$request_log" | sort -u | wc -l | tr -d '[:space:]')" = "15"
+          test "$(cut -f1 "$request_log" | sort -u | wc -l | tr -d '[:space:]')" = "16"
           test "$(grep -c -- '--setup-invocation-id' "$request_log" || true)" = "0"
 
       - name: Check default CLI contract version
         run: |
           ruby -ryaml -e '
             action = YAML.safe_load(File.read("action.yml"))
-            abort "unexpected default maze version" unless action.dig("inputs", "version", "default") == "v0.0.10"
+            abort "unexpected default maze version" unless action.dig("inputs", "version", "default") == "v0.0.11"
           '
 
       - id: invalid_package

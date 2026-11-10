@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 steps:
-  - uses: packagemaze/setup-maze@v0.0.6
+  - uses: packagemaze/setup-maze@v0.0.7
   - run: maze version
 ```
 
@@ -36,7 +36,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.6
+    uses: packagemaze/setup-maze@v0.0.7
     with:
       feed: <organization>/<feed>
       purpose: install
@@ -72,7 +72,7 @@ steps:
   - uses: actions/checkout@v6
 
   - id: maze-docker
-    uses: packagemaze/setup-maze@v0.0.6
+    uses: packagemaze/setup-maze@v0.0.7
     with:
       feed: <organization>/<feed>
       purpose: docker-build
@@ -124,12 +124,12 @@ per Feed and list each `secret_files` output directly under the same
 
 ```yaml
 - id: maze-npm-docker
-  uses: packagemaze/setup-maze@v0.0.6
+  uses: packagemaze/setup-maze@v0.0.7
   with:
     feed: <organization>/<npm-feed>
     purpose: docker-build
 - id: maze-pypi-docker
-  uses: packagemaze/setup-maze@v0.0.6
+  uses: packagemaze/setup-maze@v0.0.7
   with:
     feed: <organization>/<pypi-feed>
     purpose: docker-build
@@ -158,7 +158,7 @@ one setup-maze step per Feed and give each step a distinct lowercase,
 protocol-matched `secret-id`, such as `packagemaze_npm_web` and
 `packagemaze_npm_admin`. Use those ids in the matching Dockerfile mounts.
 
-Publish tokens require the Feed and package name:
+A publish token is for one Feed and publishes any package there:
 
 ```yaml
 permissions:
@@ -167,11 +167,10 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.6
+    uses: packagemaze/setup-maze@v0.0.7
     with:
       feed: <organization>/<feed>
       purpose: publish
-      package: <package-name>
 
   - run: npm publish
     env:
@@ -188,7 +187,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.6
+    uses: packagemaze/setup-maze@v0.0.7
     with:
       feed: <organization>/<feed>
 
@@ -206,13 +205,13 @@ repository configuration.
 
 | Name               | Default                   | Description                                                                                                                                                                                          |
 | ------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | `v0.0.10`                 | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                                                                                                         |
+| `version`          | `v0.0.11`                 | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                                                                                                         |
 | `repository`       | `packagemaze/maze-cli`    | GitHub repository that publishes maze CLI release assets.                                                                                                                                            |
 | `install-dir`      | runner temp directory     | Directory where the maze binary is installed.                                                                                                                                                        |
 | `release-base-url` | release URL for `version` | Override release asset base URL for tests and mirrors.                                                                                                                                               |
 | `feed`             | unset                     | PackageMaze Feed in `org/feed` form. When omitted, setup-maze only installs `maze`.                                                                                                                  |
 | `purpose`          | `install`                 | Token purpose passed to `maze auth exchange-oidc`.                                                                                                                                                   |
-| `package`          | unset                     | Package name for publish tokens. Required with `purpose: publish`.                                                                                                                                   |
+| `package`          | unset                     | No longer needed: a publish token is for its Feed. A name given here is passed on and ignored.                                                                                                       |
 | `secret-id`        | protocol default          | Optional Docker BuildKit bundle id for `purpose: docker-build`. Use a lowercase protocol-matched id only when one Docker build needs multiple same-protocol Feeds; do not include a `token` segment. |
 
 ## Outputs
