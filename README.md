@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 steps:
-  - uses: packagemaze/setup-maze@v0.0.7
+  - uses: packagemaze/setup-maze@v0.0.8
   - run: maze version
 ```
 
@@ -36,7 +36,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.7
+    uses: packagemaze/setup-maze@v0.0.8
     with:
       feed: <organization>/<feed>
       purpose: install
@@ -72,7 +72,7 @@ steps:
   - uses: actions/checkout@v6
 
   - id: maze-docker
-    uses: packagemaze/setup-maze@v0.0.7
+    uses: packagemaze/setup-maze@v0.0.8
     with:
       feed: <organization>/<feed>
       purpose: docker-build
@@ -124,12 +124,12 @@ per Feed and list each `secret_files` output directly under the same
 
 ```yaml
 - id: maze-npm-docker
-  uses: packagemaze/setup-maze@v0.0.7
+  uses: packagemaze/setup-maze@v0.0.8
   with:
     feed: <organization>/<npm-feed>
     purpose: docker-build
 - id: maze-pypi-docker
-  uses: packagemaze/setup-maze@v0.0.7
+  uses: packagemaze/setup-maze@v0.0.8
   with:
     feed: <organization>/<pypi-feed>
     purpose: docker-build
@@ -167,7 +167,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.7
+    uses: packagemaze/setup-maze@v0.0.8
     with:
       feed: <organization>/<feed>
       purpose: publish
@@ -187,7 +187,7 @@ permissions:
 
 steps:
   - id: maze
-    uses: packagemaze/setup-maze@v0.0.7
+    uses: packagemaze/setup-maze@v0.0.8
     with:
       feed: <organization>/<feed>
 
@@ -205,7 +205,7 @@ repository configuration.
 
 | Name               | Default                   | Description                                                                                                                                                                                          |
 | ------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | `v0.0.11`                 | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                                                                                                         |
+| `version`          | `v0.0.13`                 | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                                                                                                         |
 | `repository`       | `packagemaze/maze-cli`    | GitHub repository that publishes maze CLI release assets.                                                                                                                                            |
 | `install-dir`      | runner temp directory     | Directory where the maze binary is installed.                                                                                                                                                        |
 | `release-base-url` | release URL for `version` | Override release asset base URL for tests and mirrors.                                                                                                                                               |
