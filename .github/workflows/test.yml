@@ -9,23 +9,6 @@ permissions:
   contents: read
 
 jobs:
-  native-plan:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7.0.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.22.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          version: 0.13.8
-          enable-cache: false
-      - name: Test native install plan capture
-        run: |
-          uv --version
-          node --test capture-install-plan/capture.test.mjs capture-install-plan/adapters/native-reports.test.mjs
-
   smoke:
     strategy:
       fail-fast: false

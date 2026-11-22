@@ -242,7 +242,3 @@ invocation id generated for that action invocation. PackageMaze can use this
 caller-provided correlation value to connect the exchange and Token created by
 the same setup call. The id contains no user intent and is not provider-signed
 Build OIDC Evidence.
-
-### Record a native install plan
-
-A trusted CI job can attach the package client’s dry run for one Project and commit to its PackageMaze Run. [Capture action and workflow example](capture-install-plan/README.md)
