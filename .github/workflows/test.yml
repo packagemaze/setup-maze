@@ -259,11 +259,11 @@ jobs:
           test "${SECRET_FILES#packagemaze_npm=}" = "$SECRET_PATH"
           grep -q "fake-docker-token" "$SECRET_PATH"
           grep -q "registry=https://pkg.packagemaze.com/org/feed/" "$SECRET_PATH"
-          ! grep -Fq "$BUILD_URL" "$SECRET_PATH"
-          ! grep -q "MAZE_BUILD_NUMBER" "$SECRET_PATH"
-          ! grep -q "MAZE_BUILD_URL" "$SECRET_PATH"
-          ! grep -q "MAZE_TOKEN" "$SECRET_PATH"
-          ! grep -q "COREPACK_NPM_TOKEN" "$SECRET_PATH"
+          if grep -Fq "$BUILD_URL" "$SECRET_PATH"; then exit 1; fi
+          if grep -q "MAZE_BUILD_NUMBER" "$SECRET_PATH"; then exit 1; fi
+          if grep -q "MAZE_BUILD_URL" "$SECRET_PATH"; then exit 1; fi
+          if grep -q "MAZE_TOKEN" "$SECRET_PATH"; then exit 1; fi
+          if grep -q "COREPACK_NPM_TOKEN" "$SECRET_PATH"; then exit 1; fi
           (
             . "$SECRET_PATH"
             test -z "${MAZE_BUILD_NUMBER:-}"
@@ -294,8 +294,8 @@ jobs:
           test -z "$BUILD_NUMBER"
           test -z "$BUILD_URL"
           test -f "$SECRET_PATH"
-          ! grep -q "MAZE_BUILD_NUMBER" "$SECRET_PATH"
-          ! grep -q "MAZE_BUILD_URL" "$SECRET_PATH"
+          if grep -q "MAZE_BUILD_NUMBER" "$SECRET_PATH"; then exit 1; fi
+          if grep -q "MAZE_BUILD_URL" "$SECRET_PATH"; then exit 1; fi
 
       - id: server_build_values
         uses: ./
@@ -526,9 +526,9 @@ jobs:
           test "${SECRET_FILES#packagemaze_pypi=}" = "$SECRET_PATH"
           grep -q "fake-pypi-docker-token" "$SECRET_PATH"
           grep -q "PACKAGEMAZE_PYPI_INDEX_SCHEME='http'" "$SECRET_PATH"
-          ! grep -q "MAZE_TOKEN" "$SECRET_PATH"
-          ! grep -q "UV_INDEX_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"
-          ! grep -q "POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"
+          if grep -q "MAZE_TOKEN" "$SECRET_PATH"; then exit 1; fi
+          if grep -q "UV_INDEX_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"; then exit 1; fi
+          if grep -q "POETRY_HTTP_BASIC_PACKAGEMAZE_PASSWORD" "$SECRET_PATH"; then exit 1; fi
           (
             . "$SECRET_PATH"
             test -z "${MAZE_TOKEN:-}"
@@ -591,10 +591,17 @@ jobs:
             ${{ steps.docker_token.outputs.secret_files }}
             ${{ steps.docker_pypi_token.outputs.secret_files }}
 
+      - name: Check no step negates a command to assert
+        run: |
+          set -euo pipefail
+          # set -e ignores a command negated with !, so one that is not a
+          # step's last command can never fail it. Use if ...; then exit 1; fi.
+          if grep -nE '^[[:space:]]+! ' .github/workflows/test.yml; then exit 1; fi
+
       - name: Check action avoids Bash 4-only lowercase expansion
         run: |
           set -euo pipefail
-          ! grep -n '\${[^}]*,,}' action.yml
+          if grep -n '\${[^}]*,,}' action.yml; then exit 1; fi
 
       - name: Check setup invocation contract
         run: |
