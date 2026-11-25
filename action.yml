@@ -3,8 +3,11 @@ description: Install the PackageMaze maze CLI
 
 inputs:
   version:
-    description: PackageMaze CLI release tag to install.
+    description: PackageMaze CLI release tag to install. setup-maze verifies the download against the SHA-256 it pins for that release in maze-checksums.txt.
     default: v0.0.13
+  sha256:
+    description: SHA-256 of the maze archive for this runner. Needed only for a release setup-maze pins no hash for.
+    required: false
   repository:
     description: GitHub repository that publishes maze CLI release assets.
     default: packagemaze/maze-cli
@@ -66,6 +69,7 @@ runs:
         REQUESTED_INSTALL_DIR: ${{ inputs.install-dir }}
         RELEASE_BASE_URL: ${{ inputs.release-base-url }}
         REPOSITORY: ${{ inputs.repository }}
+        REQUESTED_SHA256: ${{ inputs.sha256 }}
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
@@ -104,12 +108,31 @@ runs:
           install_dir="$(cygpath -m "$install_dir")"
         fi
 
+        # A checksum file downloaded from the same release would be replaced
+        # along with the archive, so the expected hash comes from this action.
+        if [ -n "$REQUESTED_SHA256" ]; then
+          expected_sha256="$(printf '%s' "$REQUESTED_SHA256" | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$expected_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            printf 'sha256 must be 64 hexadecimal characters.\n' >&2
+            exit 1
+          fi
+        else
+          checksums_file="${GITHUB_ACTION_PATH}/maze-checksums.txt"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            checksums_file="$(cygpath -u "$checksums_file")"
+          fi
+          expected_sha256="$(awk -v version="$VERSION" -v archive="$archive" '$1 == version && $3 == archive { print $2 }' "$checksums_file")"
+          if [ -z "$expected_sha256" ]; then
+            printf 'setup-maze pins no SHA-256 for %s of maze %s. Use a release listed in maze-checksums.txt, or pass the archive SHA-256 as sha256.\n' "$archive" "$VERSION" >&2
+            exit 1
+          fi
+        fi
+
         tmp_dir="$(mktemp -d)"
         trap 'rm -rf "$tmp_dir"' EXIT
 
         curl -fsSLo "${tmp_dir}/${archive}" "${release_url}/${archive}"
-        curl -fsSLo "${tmp_dir}/maze_checksums.txt" "${release_url}/maze_checksums.txt"
-        grep "  ${archive}$" "${tmp_dir}/maze_checksums.txt" > "${tmp_dir}/${archive}.sha256"
+        printf '%s  %s\n' "$expected_sha256" "$archive" > "${tmp_dir}/${archive}.sha256"
         if command -v shasum > /dev/null; then
           (cd "$tmp_dir" && shasum -a 256 -c "${archive}.sha256")
         else

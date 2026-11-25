@@ -205,7 +205,8 @@ repository configuration.
 
 | Name               | Default                   | Description                                                                                                                                                                                          |
 | ------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | `v0.0.13`                 | PackageMaze CLI release tag to install. Use `latest` for the latest release.                                                                                                                         |
+| `version`          | `v0.0.13`                 | PackageMaze CLI release tag to install.                                                                                                                                                              |
+| `sha256`           | pinned for `version`      | SHA-256 of the maze archive for this runner. Needed only for a release `maze-checksums.txt` does not list.                                                                                           |
 | `repository`       | `packagemaze/maze-cli`    | GitHub repository that publishes maze CLI release assets.                                                                                                                                            |
 | `install-dir`      | runner temp directory     | Directory where the maze binary is installed.                                                                                                                                                        |
 | `release-base-url` | release URL for `version` | Override release asset base URL for tests and mirrors.                                                                                                                                               |
@@ -232,6 +233,12 @@ Use `secret_args` directly in the `run:` command, for example
 `docker buildx build ${{ steps.maze-docker.outputs.secret_args }} .`. Do not
 copy it into an environment variable first; shell quoting inside a variable is
 not re-parsed.
+
+setup-maze checks the downloaded archive against the SHA-256 it pins for that
+release in [`maze-checksums.txt`](maze-checksums.txt), not against a checksum
+file downloaded from the same release, which could be replaced along with the
+archive. A release it does not list needs the `sha256` input. Name a release
+rather than `latest`, which no pinned hash can cover.
 
 setup-maze installs the Linux x64, Linux ARM64, macOS ARM64, and Windows x64
 builds. On Windows runners the installed binary is `maze.exe`; `maze` on `PATH`

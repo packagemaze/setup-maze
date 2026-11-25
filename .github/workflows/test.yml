@@ -42,7 +42,8 @@ jobs:
           & $env:BINARY version
           maze version
 
-      - name: Create fake release assets
+      - id: fake_release
+        name: Create fake release assets
         run: |
           set -euo pipefail
           mkdir -p fake-release fake-bin
@@ -59,6 +60,7 @@ jobs:
           else
             (cd fake-release && sha256sum --text "$archive" > maze_checksums.txt)
           fi
+          printf 'sha256=%s\n' "$(cut -d' ' -f1 fake-release/maze_checksums.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Serve fake release assets
         run: |
@@ -67,10 +69,65 @@ jobs:
           printf '%s\n' "$!" > fake-release-server.pid
           curl -fsS -o /dev/null --retry 30 --retry-connrefused --retry-delay 1 --connect-timeout 2 http://127.0.0.1:8765/maze_checksums.txt
 
+      - id: release_checksums_ignored
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+
+      - name: Check a matching checksum file from the release is not trusted
+        env:
+          OUTCOME: ${{ steps.release_checksums_ignored.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: wrong_sha256
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+
+      - name: Check a wrong sha256 refuses the archive
+        env:
+          OUTCOME: ${{ steps.wrong_sha256.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: malformed_sha256
+        uses: ./
+        continue-on-error: true
+        with:
+          release-base-url: http://127.0.0.1:8765
+          sha256: not-a-sha256
+
+      - name: Check a malformed sha256 is refused
+        env:
+          OUTCOME: ${{ steps.malformed_sha256.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
+      - id: unpinned_version
+        uses: ./
+        continue-on-error: true
+        with:
+          version: latest
+
+      - name: Check a release with no pinned SHA-256 needs sha256
+        env:
+          OUTCOME: ${{ steps.unpinned_version.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = "failure"
+
       - id: install_only
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
 
       - name: Check install-only outputs
         env:
@@ -92,6 +149,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
 
       - name: Check install token output
@@ -109,6 +167,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           purpose: publish
 
@@ -127,6 +186,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/legacy-build
 
       - name: Check older server omits ordinary Build outputs cleanly
@@ -145,6 +205,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           purpose: publish
 
       - name: Check publish validation requires feed
@@ -158,6 +219,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           purpose: publish
           package: "@scope/package"
@@ -173,6 +235,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           purpose: docker-build
 
@@ -217,6 +280,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/legacy-build
           purpose: docker-build
 
@@ -237,6 +301,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/mismatched-build
           purpose: docker-build
 
@@ -255,6 +320,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/incomplete-build
           purpose: docker-build
 
@@ -274,6 +340,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           purpose: docker-build
           secret-id: packagemaze_npm_token
@@ -290,6 +357,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           purpose: docker-build
           secret-id: packagemaze_npm_TOKEN
@@ -306,6 +374,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           purpose: docker-build
           secret-id: packagemaze_npm_Admin
@@ -322,6 +391,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/missing-metadata
           purpose: docker-build
 
@@ -345,6 +415,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/old-cli
           purpose: docker-build
 
@@ -368,6 +439,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/unsupported
           purpose: docker-build
 
@@ -414,6 +486,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/admin
           purpose: docker-build
           secret-id: packagemaze_npm_admin
@@ -433,6 +506,7 @@ jobs:
         uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/pypi
           purpose: docker-build
 
@@ -539,11 +613,25 @@ jobs:
             abort "unexpected default maze version" unless action.dig("inputs", "version", "default") == "v0.0.13"
           '
 
+      - name: Check maze-checksums.txt pins every archive of the default version
+        run: |
+          set -euo pipefail
+          if grep -n 'maze_checksums.txt' action.yml; then
+            exit 1
+          fi
+          if grep -v '^#' maze-checksums.txt | grep -Ev '^v[0-9]+\.[0-9]+\.[0-9]+  [0-9a-f]{64}  maze_[a-z0-9_]+\.(tar\.gz|zip)$'; then
+            exit 1
+          fi
+          for archive in maze_darwin_arm64.tar.gz maze_linux_amd64.tar.gz maze_linux_arm64.tar.gz maze_windows_amd64.zip; do
+            test "$(grep -c "^v0.0.13  [0-9a-f]\{64\}  ${archive}\$" maze-checksums.txt)" = "1"
+          done
+
       - id: invalid_package
         uses: ./
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           package: "@scope/package"
 
@@ -559,6 +647,7 @@ jobs:
         continue-on-error: true
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
           feed: org/feed
           secret-id: packagemaze_npm
 
@@ -572,6 +661,7 @@ jobs:
       - uses: ./
         with:
           release-base-url: http://127.0.0.1:8765
+          sha256: ${{ steps.fake_release.outputs.sha256 }}
 
       - name: Smoke release install
         run: maze auth exchange-oidc --help
