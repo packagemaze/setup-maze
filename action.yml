@@ -4,7 +4,7 @@ description: Install the PackageMaze maze CLI
 inputs:
   version:
     description: PackageMaze CLI release tag to install. setup-maze verifies the download against the SHA-256 it pins for that release in maze-checksums.txt.
-    default: v0.0.16
+    default: v0.0.17
   sha256:
     description: SHA-256 of the maze archive for this runner. Needed only for a release setup-maze pins no hash for.
     required: false

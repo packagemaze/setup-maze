@@ -617,7 +617,7 @@ jobs:
         run: |
           ruby -ryaml -e '
             action = YAML.safe_load(File.read("action.yml"))
-            abort "unexpected default maze version" unless action.dig("inputs", "version", "default") == "v0.0.16"
+            abort "unexpected default maze version" unless action.dig("inputs", "version", "default") == "v0.0.17"
           '
 
       - name: Check maze-checksums.txt pins every archive of the default version
@@ -630,7 +630,7 @@ jobs:
             exit 1
           fi
           for archive in maze_darwin_arm64.tar.gz maze_linux_amd64.tar.gz maze_linux_arm64.tar.gz maze_windows_amd64.zip; do
-            test "$(grep -c "^v0.0.16  [0-9a-f]\{64\}  ${archive}\$" maze-checksums.txt)" = "1"
+            test "$(grep -c "^v0.0.17  [0-9a-f]\{64\}  ${archive}\$" maze-checksums.txt)" = "1"
           done
 
       - id: invalid_package
